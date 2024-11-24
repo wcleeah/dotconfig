@@ -1,0 +1,82 @@
+after-startup-command = [
+  'exec-and-forget borders active_color=0xFF00FF000 width=5.0'
+]
+start-at-login = false
+enable-normalization-flatten-containers = true
+enable-normalization-opposite-orientation-for-nested-containers = true
+automatically-unhide-macos-hidden-apps = true 
+
+accordion-padding = 30
+
+default-root-container-layout = 'tiles'
+default-root-container-orientation = 'horizontal'
+on-focused-monitor-changed = ['move-mouse monitor-lazy-center']
+
+[gaps]
+inner.horizontal = 20 
+inner.vertical =  20 
+outer.left = 20
+outer.right = 20
+outer.top = 20
+outer.bottom = 20
+
+[mode.main.binding]
+alt-backslash = 'layout tiles horizontal vertical'
+alt-comma = 'layout accordion horizontal vertical'
+
+alt-h = 'focus left'
+alt-j = 'focus down'
+alt-k = 'focus up'
+alt-l = 'focus right'
+
+alt-shift-h = 'move left'
+alt-shift-j = 'move down'
+alt-shift-k = 'move up'
+alt-shift-l = 'move right'
+
+alt-minus = 'resize smart -50'
+alt-equal = 'resize smart +50'
+alt-shift-minus = 'resize smart -200'
+alt-shift-equal = 'resize smart +200'
+
+alt-1 = 'workspace main'
+alt-2 = 'workspace secondary'
+alt-v = 'workspace view-only'
+alt-m = 'workspace messaging'
+alt-s = 'workspace sound' 
+alt-c = 'workspace control'
+
+alt-shift-1 = 'move-node-to-workspace main'
+alt-shift-2 = 'move-node-to-workspace secondary'
+alt-shift-v = 'move-node-to-workspace view-only'
+alt-shift-m = 'move-node-to-workspace messaging'
+alt-shift-s = 'move-node-to-workspace sound'
+alt-shift-c = 'move-node-to-workspace control'
+
+alt-tab = 'workspace-back-and-forth'
+alt-shift-tab = 'move-workspace-to-monitor --wrap-around next'
+
+alt-shift-semicolon = 'mode service'
+
+alt-ctrl-h = 'focus-monitor --wrap-around next'
+alt-ctrl-j = 'focus-monitor --wrap-around next'
+alt-ctrl-k = 'focus-monitor --wrap-around next'
+alt-ctrl-l = 'focus-monitor --wrap-around next'
+
+alt-shift-f = 'fullscreen'
+alt-shift-p = 'layout floating tiling'
+
+[mode.service.binding]
+esc = ['reload-config', 'mode main']
+r = ['flatten-workspace-tree', 'mode main'] # reset layout
+f = ['layout floating tiling', 'mode main'] # Toggle between floating and tiling layout
+backspace = ['close-all-windows-but-current', 'mode main']
+
+alt-shift-h = ['join-with left', 'mode main']
+alt-shift-j = ['join-with down', 'mode main']
+alt-shift-k = ['join-with up', 'mode main']
+alt-shift-l = ['join-with right', 'mode main']
+
+[[on-window-detected]]
+if.app-name-regex-substring = 'Calendar'
+run = ['layout floating']
