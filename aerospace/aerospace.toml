@@ -80,3 +80,7 @@ alt-shift-l = ['join-with right', 'mode main']
 [[on-window-detected]]
 if.app-name-regex-substring = 'Calendar'
 run = ['layout floating']
+
+[[on-window-detected]]
+if.app-name-regex-substring = 'Password'
+run = ['layout floating']
