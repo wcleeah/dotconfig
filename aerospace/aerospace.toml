@@ -84,3 +84,11 @@ run = ['layout floating']
 [[on-window-detected]]
 if.app-name-regex-substring = 'Password'
 run = ['layout floating']
+
+[[on-window-detected]]
+if.app-name-regex-substring = 'Setting'
+run = ['layout floating']
+
+[[on-window-detected]]
+if.app-name-regex-substring = 'Clock'
+run = ['layout floating']
