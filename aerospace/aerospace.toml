@@ -21,8 +21,8 @@ outer.top = 20
 outer.bottom = 20
 
 [mode.main.binding]
-alt-backslash = 'layout tiles horizontal vertical'
-alt-comma = 'layout accordion horizontal vertical'
+alt-shift-backslash = 'layout tiles horizontal vertical'
+alt-shift-comma = 'layout accordion horizontal vertical'
 
 alt-h = 'focus left'
 alt-j = 'focus down'
@@ -91,4 +91,8 @@ run = ['layout floating']
 
 [[on-window-detected]]
 if.app-name-regex-substring = 'Clock'
+run = ['layout floating']
+
+[[on-window-detected]]
+if.app-name-regex-substring = 'Godspeed'
 run = ['layout floating']
