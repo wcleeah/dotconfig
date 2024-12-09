@@ -2,3 +2,6 @@ jgit/
 op/
 yarn/
 .DS_Store
+direnv/
+configstore/
+simple-update-notifier/
