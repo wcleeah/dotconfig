@@ -45,3 +45,6 @@ vim.keymap.set("n", "<leader>Y", [["+Y]])
 
 vim.keymap.set('n', '<leader>xn', '<cmd>lua vim.diagnostic.goto_next()<CR>', { noremap = true, silent = true })
 vim.keymap.set('n', '<leader>xj', '<cmd>lua vim.diagnostic.goto_prev()<CR>', { noremap = true, silent = true })
+
+vim.keymap.set('n', '<leader>qn', '<cmd>cnext<CR>', { noremap = true, silent = true })
+vim.keymap.set('n', '<leader>qp', '<cmd>cprev<CR>', { noremap = true, silent = true })
