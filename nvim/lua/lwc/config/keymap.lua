@@ -35,7 +35,6 @@ vim.keymap.set({"n", "v"}, "<leader>wv", "<c-w>v")
 vim.keymap.set({"n", "v"}, "<leader>wa", "<c-w>>")
 vim.keymap.set({"n", "v"}, "<leader>wd", "<c-w><")
 
-vim.keymap.set("n", "<leader>fs", vim.cmd.Ex)
 -- greatest remap ever
 vim.keymap.set("x", "<leader>p", [["_dP]])
 
