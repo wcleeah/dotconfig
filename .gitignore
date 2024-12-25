@@ -5,3 +5,4 @@ yarn/
 direnv/
 configstore/
 simple-update-notifier/
+.idea/
