@@ -96,3 +96,8 @@ run = ['layout floating']
 [[on-window-detected]]
 if.app-name-regex-substring = 'Godspeed'
 run = ['layout floating']
+
+[[on-window-detected]]
+if.app-id = "com.mitchellh.ghostty"
+check-further-callbacks = true
+run = "layout floating"
