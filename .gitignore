@@ -6,3 +6,5 @@ direnv/
 configstore/
 simple-update-notifier/
 .idea/
+tmux/plugins/*
+!tmux/plugins/tpm

@@ -1,0 +1,4 @@
+set -g prefix C-v
+unbind C-b
+bind C-v send-prefix
+

@@ -47,3 +47,4 @@ vim.keymap.set('n', '<leader>xp', '<cmd>lua vim.diagnostic.goto_prev()<CR>', { n
 
 vim.keymap.set('n', '<leader>qn', '<cmd>cnext<CR>', { noremap = true, silent = true })
 vim.keymap.set('n', '<leader>qp', '<cmd>cprev<CR>', { noremap = true, silent = true })
+vim.keymap.set("n", "<C-f>", "<cmd>silent !tmux neww tmux-sessionizer<CR>")
