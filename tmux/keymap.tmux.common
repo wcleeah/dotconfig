@@ -1,4 +1,4 @@
-set -g prefix C-v
+set -g prefix C-t
 unbind C-b
-bind C-v send-prefix
+bind C-t send-prefix
 
