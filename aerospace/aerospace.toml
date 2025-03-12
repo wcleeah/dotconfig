@@ -46,6 +46,7 @@ alt-v = 'workspace view-only'
 alt-m = 'workspace messaging'
 alt-s = 'workspace sound' 
 alt-d = 'workspace database' 
+alt-g = 'workspace godspeed'
 
 alt-shift-1 = 'move-node-to-workspace main'
 alt-shift-2 = 'move-node-to-workspace secondary'
@@ -54,6 +55,7 @@ alt-shift-v = 'move-node-to-workspace view-only'
 alt-shift-m = 'move-node-to-workspace messaging'
 alt-shift-s = 'move-node-to-workspace sound'
 alt-shift-d = 'move-node-to-workspace database'
+alt-shift-g = 'move-node-to-workspace godspeed'
 
 alt-tab = 'workspace-back-and-forth'
 alt-shift-tab = 'move-workspace-to-monitor --wrap-around next'
@@ -96,10 +98,6 @@ if.app-name-regex-substring = 'Clock'
 run = ['layout floating']
 
 [[on-window-detected]]
-if.app-name-regex-substring = 'Godspeed'
-run = ['layout floating']
-
-[[on-window-detected]]
 if.app-id = "com.mitchellh.ghostty"
 check-further-callbacks = true
 run = "layout floating"
@@ -112,3 +110,6 @@ run = ['move-node-to-workspace database']
 if.app-name-regex-substring = 'Compass'
 run = ['move-node-to-workspace database']
 
+[[on-window-detected]]
+if.app-name-regex-substring = 'Godspeed'
+run = ['move-node-to-workspace godspeed']
