@@ -1,10 +1,14 @@
-## The config folder
+# Dotconfig
+This repo stores all my config for different clis
+
+## Installation
+- Clone the repo to the ~/.config directory
+
+## The configs
 - nvim
 - aerospace
-
-## Previously on these repo
-- [nvim-setup](https://github.com/wcleeah/nvim-setup)
-- [aerospace-config](https://github.com/wcleeah/aerospace-config)
+- atuin
+- ghostty
 
 ## Ignored
 - op -> one password config
