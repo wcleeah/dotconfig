@@ -9,6 +9,7 @@ This repo stores all my config for different clis
 - aerospace
 - atuin
 - ghostty
+- tmux
 
 ## Ignored
 - op -> one password config
