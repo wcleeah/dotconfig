@@ -127,3 +127,6 @@ run = ['move-node-to-workspace godspeed']
 [[on-window-detected]]
 if.app-name-regex-substring = 'Heptabase'
 run = ['move-node-to-workspace heptabase']
+
+[workspace-to-monitor-force-assignment]
+messaging = 'built-in'

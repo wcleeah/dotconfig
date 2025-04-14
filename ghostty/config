@@ -11,3 +11,12 @@ macos-titlebar-style = tabs
 font-size = 11
 font-thicken = true
 adjust-cell-height = 10%
+
+# Keybindings
+keybind = ctrl+]=new_split:right
+keybind = ctrl+[=new_split:left
+keybind = ctrl+shift+]=new_split:down
+keybind = ctrl+shift+[=new_split:up
+
+keybind = opt+shift+]=goto_split:right
+keybind = opt+shift+[=goto_split:left

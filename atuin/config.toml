@@ -1,8 +1,8 @@
-enter_accept = true
+enter_accept = true 
 auto_sync = false
 update_check = false
 style = "full"
-invert = true
+invert = false 
 keymap_mode = "vim-normal"
 keymap_cursor = { emacs = "blink-block", vim_insert = "blink-block", vim_normal = "steady-bar" }
 
