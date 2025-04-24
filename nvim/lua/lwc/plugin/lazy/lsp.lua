@@ -126,6 +126,9 @@ return {
                 vim.keymap.set('n', '<leader>lcn', rename, opts)
                 vim.keymap.set('n', '<leader>le', '<cmd>lua vim.diagnostic.open_float()<cr>', opts)
                 vim.keymap.set("n", "<leader>ca", '<cmd>lua vim.lsp.buf.code_action()<cr>', opts)
+                vim.keymap.set('n', '<leader>xn', '<cmd>lua vim.diagnostic.goto_next()<CR>', { noremap = true, silent = true })
+                vim.keymap.set('n', '<leader>xp', '<cmd>lua vim.diagnostic.goto_prev()<CR>', { noremap = true, silent = true })
+
             end
 
             lsp_zero.extend_lspconfig({

@@ -24,6 +24,33 @@ return {
                     inc_rename = false,           -- enables an input dialog for inc-rename.nvim
                     lsp_doc_border = false,       -- add a border to hover docs and signature help
                 },
+                routes = {
+                    {
+                        view = "notify",
+                        filter = {
+                            event = "msg_showmode",
+                            find = "recording",
+                        },
+                    },
+                    {
+                        filter = {
+                            event = "msg_show",
+                            find = "written",
+                        },
+                        opts = { skip = true },
+                    },
+                    {
+                        view = "split",
+                        filter = {
+                            event = "msg_show",
+                            blocking = true,
+                            find = "Code actions:",
+                        },
+                    },
+                },
+            })
+            require("notify").setup({
+                timeout = 50, -- time in milliseconds
             })
         end
     },
