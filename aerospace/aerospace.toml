@@ -1,17 +1,32 @@
+# Configuration for AEROSPACE 
+# See https://nikitabobko.github.io/AeroSpace/guide#configuring-aerospace for the full list
+
+# Using borders a separate mac app
+# this add a green border to the active window
+# which helps when the layout is split
 after-startup-command = [
   'exec-and-forget borders active_color=0xFF00FF000 width=5.0'
 ]
 start-at-login = false
+
+# This two normalization make sures the correct splitting direction be used
+# see https://nikitabobko.github.io/AeroSpace/guide#normalization
 enable-normalization-flatten-containers = true
 enable-normalization-opposite-orientation-for-nested-containers = true
+
+# No hiding from aerospace
 automatically-unhide-macos-hidden-apps = true 
 
+# The space around each window (that are not in floating mode) 
 accordion-padding = 30
 
 default-root-container-layout = 'tiles'
 default-root-container-orientation = 'horizontal'
+
+# Move the mouse when changing workspace across monitor
 on-focused-monitor-changed = ['move-mouse monitor-lazy-center']
 
+# When in tiles mode, configure the space between tiles
 [gaps]
 inner.horizontal = 20 
 inner.vertical =  20 
@@ -21,24 +36,30 @@ outer.top = 20
 outer.bottom = 20
 
 [mode.main.binding]
+# Switch between tiles, accordion and floating mode
 alt-shift-backslash = 'layout tiles horizontal vertical'
 alt-shift-comma = 'layout accordion horizontal vertical'
+alt-shift-p = 'layout floating tiling'
 
+# Navigate windows in a workspace
 alt-h = 'focus left'
 alt-j = 'focus down'
 alt-k = 'focus up'
 alt-l = 'focus right'
 
+# Move the windows in a workspace
 alt-shift-h = 'move left'
 alt-shift-j = 'move down'
 alt-shift-k = 'move up'
 alt-shift-l = 'move right'
 
+# Resize the windows in a workspace
 alt-minus = 'resize smart -50'
 alt-equal = 'resize smart +50'
 alt-shift-minus = 'resize smart -200'
 alt-shift-equal = 'resize smart +200'
 
+# Switch between workspace
 alt-1 = 'workspace main'
 alt-2 = 'workspace secondary'
 alt-3 = 'workspace third'
@@ -53,6 +74,7 @@ alt-d = 'workspace database'
 alt-g = 'workspace godspeed'
 alt-b = 'workspace heptabase'
 
+# Move windows between workspace
 alt-shift-1 = 'move-node-to-workspace main'
 alt-shift-2 = 'move-node-to-workspace secondary'
 alt-shift-3 = 'move-node-to-workspace third'
@@ -67,66 +89,59 @@ alt-shift-d = 'move-node-to-workspace database'
 alt-shift-g = 'move-node-to-workspace godspeed'
 alt-shift-b = 'move-node-to-workspace heptabase'
 
+# Go to last visited workspave
 alt-tab = 'workspace-back-and-forth'
+
+# Move the workspace to the next monitor
 alt-shift-tab = 'move-workspace-to-monitor --wrap-around next'
 
+# Switch to service mode, which will have another set of binding
 alt-shift-semicolon = 'mode service'
 
-alt-ctrl-h = 'focus-monitor --wrap-around next'
-alt-ctrl-j = 'focus-monitor --wrap-around next'
-alt-ctrl-k = 'focus-monitor --wrap-around next'
-alt-ctrl-l = 'focus-monitor --wrap-around next'
-
-alt-shift-f = 'fullscreen'
-alt-shift-p = 'layout floating tiling'
-
 [mode.service.binding]
+# Reload aerospace config, aka this file
 esc = ['reload-config', 'mode main']
-r = ['flatten-workspace-tree', 'mode main'] # reset layout
-f = ['layout floating tiling', 'mode main'] # Toggle between floating and tiling layout
-backspace = ['close-all-windows-but-current', 'mode main']
 
-alt-shift-h = ['join-with left', 'mode main']
-alt-shift-j = ['join-with down', 'mode main']
-alt-shift-k = ['join-with up', 'mode main']
-alt-shift-l = ['join-with right', 'mode main']
-
+# Force a bunch of apps to use floating mode when it opens
 [[on-window-detected]]
 if.app-name-regex-substring = 'Calendar'
-run = ['layout floating']
+run = 'layout floating'
 
 [[on-window-detected]]
 if.app-name-regex-substring = 'Password'
-run = ['layout floating']
+run = 'layout floating'
 
 [[on-window-detected]]
 if.app-name-regex-substring = 'Setting'
-run = ['layout floating']
+run = 'layout floating'
 
 [[on-window-detected]]
 if.app-name-regex-substring = 'Clock'
-run = ['layout floating']
+run = 'layout floating'
 
 [[on-window-detected]]
 if.app-id = "com.mitchellh.ghostty"
-check-further-callbacks = true
 run = "layout floating"
 
+# Force a bunch of apps to be in a ceretain workspace when it opens
 [[on-window-detected]]
 if.app-name-regex-substring = 'Datagrip'
-run = ['move-node-to-workspace database']
+run = 'move-node-to-workspace database'
 
 [[on-window-detected]]
 if.app-name-regex-substring = 'Compass'
-run = ['move-node-to-workspace database']
+run = 'move-node-to-workspace database'
 
 [[on-window-detected]]
 if.app-name-regex-substring = 'Godspeed'
-run = ['move-node-to-workspace godspeed']
+run = 'move-node-to-workspace godspeed'
 
 [[on-window-detected]]
 if.app-name-regex-substring = 'Heptabase'
-run = ['move-node-to-workspace heptabase']
+run = 'move-node-to-workspace heptabase'
 
+# Force messaging workspace to only be in the built in monitor
+# I often need to share screen on a TV, 
+# and aerospace always move my messaging workspace to the TV monitor.
 [workspace-to-monitor-force-assignment]
 messaging = 'built-in'

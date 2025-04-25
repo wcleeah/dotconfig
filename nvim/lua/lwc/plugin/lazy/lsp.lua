@@ -12,6 +12,7 @@ return {
     },
     {
         "folke/trouble.nvim",
+        lazy = false,
         opts = {}, -- for default options, refer to the configuration section for custom setup.
         cmd = "Trouble",
         keys = {

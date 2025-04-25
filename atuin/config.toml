@@ -1,16 +1,32 @@
+# Configuration for ATUIN
+# See https://docs.atuin.sh/configuration/config/ for the full list
+
+# Use enter to accept the history, not tab
 enter_accept = true 
+
+# Do not use atuin sync
 auto_sync = false
+
+# Do not check updates for atuin
 update_check = false
 style = "full"
+
+# Keep the arrow going
 invert = false 
+
+# Use vim keymap to navigate
+# Also always start in normal mode
 keymap_mode = "vim-normal"
 keymap_cursor = { emacs = "blink-block", vim_insert = "blink-block", vim_normal = "steady-bar" }
 
 [stats]
 common_prefix = ["sudo"]
+
+# Ignore these command, coz these history have no use
 ignored_commands = [
   "cd",
   "ls",
-  "vi"
+  "vi",
+  "nvim"
 ]
 

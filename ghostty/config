@@ -1,7 +1,16 @@
-# Theming
+# Configuration for GHOSTTY 
+# See https://ghostty.org/docs/config/reference for the full list
+
+# Theming, can check via ghostty cli
 theme = Builtin Pastel Dark
+
+# Background color
 background = 000000
+
+# It means i replaced a pink color for the Xterm prompt color 5
 palette = 5=#ff8ffd
+
+# Text color
 foreground = ffffff 
 
 # Window
@@ -9,14 +18,18 @@ macos-titlebar-style = tabs
 
 # Font
 font-size = 11
+
+# Draw fonts with a thicker stroke
 font-thicken = true
+
+# The height of the cell wrapping around a character
 adjust-cell-height = 10%
 
 # Keybindings
+# Window managemenr
 keybind = ctrl+]=new_split:right
 keybind = ctrl+[=new_split:left
 keybind = ctrl+shift+]=new_split:down
 keybind = ctrl+shift+[=new_split:up
-
 keybind = opt+shift+]=goto_split:right
 keybind = opt+shift+[=goto_split:left
