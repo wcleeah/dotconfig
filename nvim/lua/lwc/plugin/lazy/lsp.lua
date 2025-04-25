@@ -92,6 +92,7 @@ return {
                     tf = { "terraform_fmt" },
                     rust = { "rustfmt" },
                     zsh = { "beautysh" },
+                    lua = { "stylua" },
                 },
             })
             vim.keymap.set("n", "<leader>f", "<cmd>lua require('conform').format()<cr>", { desc = "Format code" })

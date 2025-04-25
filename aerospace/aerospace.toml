@@ -145,3 +145,5 @@ run = 'move-node-to-workspace heptabase'
 # and aerospace always move my messaging workspace to the TV monitor.
 [workspace-to-monitor-force-assignment]
 messaging = 'built-in'
+sound = 'built-in'
+view-only = 'built-in'
