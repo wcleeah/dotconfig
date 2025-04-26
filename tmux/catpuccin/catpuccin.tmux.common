@@ -1,3 +1,4 @@
+# configure the status line
 set -g @catppuccin_flavor 'mocha'
 set -g @catppuccin_window_status_style 'rounded'
 set -g @catppuccin_window_left_separator ""

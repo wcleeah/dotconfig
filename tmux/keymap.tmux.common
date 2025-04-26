@@ -1,4 +1,6 @@
+# use ctrl-t as the prefix key
 set -g prefix C-t
 unbind C-b
-bind C-t send-prefix
 
+# Allows sending a literal Ctrl+t to the terminal/tmux
+bind C-t send-prefix
