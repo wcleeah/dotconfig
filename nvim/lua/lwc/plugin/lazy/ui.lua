@@ -96,14 +96,4 @@ return {
             vim.cmd [[highlight Visual guifg=#000000 guibg=#5ad4e6]]
         end
     },
-    {
-        "HiPhish/rainbow-delimiters.nvim"
-    },
-    {
-        'brenoprata10/nvim-highlight-colors',
-        config = function()
-            vim.opt.termguicolors = true
-            require('nvim-highlight-colors').setup({})
-        end
-    }
 }
