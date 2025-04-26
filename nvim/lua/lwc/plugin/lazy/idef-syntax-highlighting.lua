@@ -1,4 +1,7 @@
+-- This file focuses on syntax highlighting related functions
+-- So basically this file is about how to display and highlight the source code
 return {
+    -- Syntax highlighting using treesitter api
 	{
 		"nvim-treesitter/nvim-treesitter",
 		build = ":TSUpdate",
@@ -45,6 +48,8 @@ return {
 			})
 		end,
 	},
+    -- This keeps the context of a block scope
+    -- Fix the closest start of a block at the top of the screen
 	{
 		"nvim-treesitter/nvim-treesitter-context",
 		dependencies = {
@@ -59,13 +64,17 @@ return {
 			end, { silent = true })
 		end,
 	},
+    -- rainbow brackets
 	{
 		"HiPhish/rainbow-delimiters.nvim",
 	},
+    -- Highlight hex code, like this
+    -- #ffffff
+    -- #aaaaaa
+    -- #333333
 	{
 		"brenoprata10/nvim-highlight-colors",
 		config = function()
-			vim.opt.termguicolors = true
 			require("nvim-highlight-colors").setup({})
 		end,
 	},

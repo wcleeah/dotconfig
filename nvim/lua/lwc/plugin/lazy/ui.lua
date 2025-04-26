@@ -1,3 +1,4 @@
+-- Neovim UI plugin related 
 return {
     {
         "folke/noice.nvim",
@@ -25,6 +26,7 @@ return {
                     lsp_doc_border = false,       -- add a border to hover docs and signature help
                 },
                 routes = {
+                    -- Show notification when a macro recording is started
                     {
                         view = "notify",
                         filter = {
@@ -32,6 +34,7 @@ return {
                             find = "recording",
                         },
                     },
+                    -- Skip buffer write notification
                     {
                         filter = {
                             event = "msg_show",
@@ -39,6 +42,9 @@ return {
                         },
                         opts = { skip = true },
                     },
+                    -- A weird bug of noice, when using lsp's code action, it will prompt the user to select an action
+                    -- However, in noice the prompt uses notification window, and the notification is not shown coz it is getting blocked by the prompt
+                    -- So to solve this problem, i use a split window to show the code action instead
                     {
                         view = "split",
                         filter = {
@@ -54,13 +60,17 @@ return {
             })
         end
     },
+    -- The bottom status line
     {
         'nvim-lualine/lualine.nvim',
         dependencies = { 'nvim-tree/nvim-web-devicons' },
         config = function()
             require('lualine').setup {
                 sections = {
+                    -- Show the current buffer file name
                     lualine_c = {{ 'filename', path = 2 }},
+                    -- Show the current mode
+                    -- Visual, Insert, Recording, etc
                     lualine_x = {
                         {
                             require("noice").api.statusline.mode.get,
@@ -73,11 +83,13 @@ return {
             }
         end
     },
+    -- Beloved colorscheme 
     {
         "loctvl842/monokai-pro.nvim",
         config = function()
             require("monokai-pro").setup({
-                overridePalette = function(filter)
+                -- Override the background color to pure black
+                overridePalette = function(_)
                     return {
                         background = "#000000",
                     }
@@ -93,7 +105,7 @@ return {
                 }
             })
             vim.cmd([[colorscheme monokai-pro]])
-            vim.cmd [[highlight Visual guifg=#000000 guibg=#5ad4e6]]
+            vim.cmd([[highlight Visual guifg=#000000 guibg=#5ad4e6]])
         end
     },
 }

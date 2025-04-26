@@ -1,17 +1,26 @@
+-- This file focuses on lsp related functions
+-- This is the second iteration of my lsp setup in neovim
+-- It is quite amazing that with nvim v0.11.0, lsp has became much easier to setup 
 return {
+    -- A tool to show diagnostics in a much better way
+    -- It can also show diagnostics from all the files in the project
 	{
 		"folke/trouble.nvim",
 		opts = {
+            -- Closing the split after all diagnostics are fixed
 			auto_close = true,
+            -- Focus the split after i open it
 			focus = true,
 		},
 		cmd = "Trouble",
 		keys = {
+            -- Trigger the trouble window for all diagnostics across all files
 			{
 				"<leader>xx",
 				"<cmd>Trouble diagnostics toggle<cr>",
 				desc = "Diagnostics (Trouble)",
 			},
+            -- Trigger the trouble window for diagnostics in the current buffer
 			{
 				"<leader>xl",
 				"<cmd>Trouble diagnostics toggle filter.buf=0<cr>",
@@ -19,6 +28,7 @@ return {
 			},
 		},
 	},
+    -- Make sure my source code is formatted as intended
 	{
 		"stevearc/conform.nvim",
 		config = function()
@@ -42,6 +52,8 @@ return {
 			)
 		end,
 	},
+    -- Mason is a lsp installer for neovim
+    -- And by using mason-lspconfig and nvim-lspconfig, i can setup lsp with the native neovim lsp api (added in nvim v0.11.0)
 	{
 		"williamboman/mason.nvim",
 		lazy = false,
@@ -51,6 +63,8 @@ return {
 		},
 		config = function()
 			require("mason").setup()
+
+            -- Write all files after renaming
 			local rename = function()
 				vim.lsp.buf.rename()
 				vim.cmd("silent! wa")
@@ -58,8 +72,8 @@ return {
 
 			-- lsp_attach is where you enable features that only work
 			-- if there is a language server active in the file
-            -- digital
 			local lsp_attach = function(_, bufnr)
+                -- Allow the lsp to update the buffer with signs
 				vim.diagnostic.config({
 					virtual_text = true,
 					signs = true,
@@ -67,6 +81,7 @@ return {
 				})
 				local opts = { buffer = bufnr }
 
+                -- Keymaps for lsp actions
 				vim.keymap.set("n", "<leader>lh", "<cmd>lua vim.lsp.buf.hover()<cr>", opts)
 				vim.keymap.set("n", "<leader>ld", "<cmd>lua vim.lsp.buf.definition()<cr>", opts)
 				vim.keymap.set("n", "<leader>lr", "<cmd>lua vim.lsp.buf.references()<cr>", opts)
@@ -88,16 +103,23 @@ return {
 				)
 			end
 
+            -- Here we use mason-lspconfig to setup lsp
+            -- It will automatically retrieve all of my installed lsp servers, and allow me to setup each of them
 			require("mason-lspconfig").setup({
 				ensure_installed = {},
 				handlers = {
+                    -- Catch all configurations for lsp servers that does not have a specific handler
 					function(server_name)
 						vim.lsp.config(server_name, {
 							on_attach = lsp_attach,
 						})
 
+                        -- The lsp server will only be launched when i open the file
+                        -- This line is just to enable the lsp server to be launched (in my understanding)
 						vim.lsp.enable(server_name)
 					end,
+                    -- Specific configuration for lua_ls
+                    -- It makes the lsp to ignore the global variables
 					["lua_ls"] = function()
 						vim.lsp.config("lua_ls", {
 							on_attach = lsp_attach,
@@ -110,6 +132,9 @@ return {
 								},
 							},
 						})
+
+                        -- The lsp server will only be launched when i open the file
+                        -- This line is just to enable the lsp server to be launched (in my understanding)
 						vim.lsp.enable("lua_ls")
 					end,
 				},
