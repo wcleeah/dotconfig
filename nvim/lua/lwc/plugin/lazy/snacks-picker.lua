@@ -28,7 +28,7 @@ return {
 				{ " ", virtual = true }, -- separator
 				{ dir, "SnacksPickerDir" }, -- the directory
 				{ "/", "SnacksPickerDir", virtual = true }, -- add the / to connect the file and the directory
-				{ filename, "SnacksPickerList" }, -- the filename
+				{ filename or item.file, "SnacksPickerList" }, -- the filename
 			}
 		end
 
@@ -109,7 +109,7 @@ return {
 				follow = true,
 				cmd = "rg",
 			})
-		end, { desc = "File Search (Without Ignored)" })
+		end, { desc = "File Search (git files + untracked)" })
 
 		-- file browser
 		-- search for all files
@@ -130,6 +130,27 @@ return {
 				},
 			})
 		end, { desc = "File Search (All)" })
+
+        -- file browser
+        -- search for logs related files
+		vim.keymap.set("n", "<leader>csl", function()
+			Snacks.picker.files({
+				format = custom_format,
+				hidden = true,
+				follow = true,
+				ignored = true,
+				cmd = "rg",
+				matcher = {
+					fuzzy = true, -- use fuzzy matching
+					smartcase = true, -- use smartcase
+					ignorecase = true, -- use ignorecase
+					sort_empty = false, -- sort results when the search string is empty
+					file_pos = true, -- support patterns like `file:line:col` and `file:line`
+					frecency = true, -- frecency bonus
+				},
+                dirs = { "log", "logs" },
+			})
+		end, { desc = "File Search (logs)" })
 
 		-- git branches
 		vim.keymap.set("n", "<leader>csg", function()

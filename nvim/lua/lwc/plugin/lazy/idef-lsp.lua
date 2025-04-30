@@ -42,6 +42,7 @@ return {
 					rust = { "rustfmt" },
 					zsh = { "beautysh" },
 					lua = { "stylua" },
+                    sql = { "pgformatter" },
 				},
 			})
 			vim.keymap.set(
