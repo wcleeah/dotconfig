@@ -8,6 +8,8 @@ vim.keymap.set("v", "K", ":m '<-2<CR>gv=gv")
 
 -- Normal J but keep the cursor position
 vim.keymap.set("n", "J", "mzJ`z")
+vim.keymap.set("n", "Ki", "mzi<CR><Esc>`z")
+vim.keymap.set("n", "K", "mza<CR><Esc>`z")
 
 -- Normal page down / up but keep the cursor in the middle of the page
 vim.keymap.set("n", "<C-d>", "<C-d>zz")

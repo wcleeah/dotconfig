@@ -43,6 +43,7 @@ return {
 					zsh = { "beautysh" },
 					lua = { "stylua" },
                     sql = { "pgformatter" },
+					python = { "black" },
 				},
 			})
 			vim.keymap.set(

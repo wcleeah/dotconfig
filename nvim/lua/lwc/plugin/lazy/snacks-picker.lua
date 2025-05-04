@@ -1,10 +1,20 @@
 -- Picker for everthing
 return {
 	"folke/snacks.nvim",
-    dependencies = { { "nvim-tree/nvim-web-devicons", opts = {} } },
+	dependencies = { { "nvim-tree/nvim-web-devicons", opts = {} } },
 	config = function()
 		-- Get the organic snacks, for setting up later
 		local Snacks = require("snacks")
+		Snacks.setup({
+			picker = {
+				matcher = {
+					frecency = true,
+				},
+				debug = {
+					scores = false, -- show scores in the list
+				},
+			},
+		})
 
 		-- file formatter, used for when the result is a file (except for the buffer selector)
 		local function custom_format(item, _)
@@ -44,6 +54,9 @@ return {
 		vim.keymap.set("n", "<leader>csf", function()
 			Snacks.picker.grep({
 				format = custom_format,
+				debug = {
+					scores = true, -- show scores in the list
+				},
 				cmd = "rg",
 				matcher = {
 					fuzzy = true, -- use fuzzy matching
@@ -61,6 +74,9 @@ return {
 		vim.keymap.set({ "n", "v" }, "<leader>css", function()
 			Snacks.picker.grep_word({
 				format = custom_format,
+				debug = {
+					scores = true, -- show scores in the list
+				},
 				cmd = "rg",
 				on_show = no_insert,
 				matcher = {
@@ -105,9 +121,20 @@ return {
 		vim.keymap.set("n", "<leader>cso", function()
 			Snacks.picker.files({
 				format = custom_format,
+				debug = {
+					scores = true, -- show scores in the list
+				},
 				hidden = true,
 				follow = true,
 				cmd = "rg",
+				matcher = {
+					fuzzy = true, -- use fuzzy matching
+					smartcase = true, -- use smartcase
+					ignorecase = true, -- use ignorecase
+					sort_empty = false, -- sort results when the search string is empty
+					file_pos = true, -- support patterns like `file:line:col` and `file:line`
+					frecency = true, -- frecency bonus
+				},
 			})
 		end, { desc = "File Search (git files + untracked)" })
 
@@ -116,6 +143,9 @@ return {
 		vim.keymap.set("n", "<leader>csa", function()
 			Snacks.picker.files({
 				format = custom_format,
+				debug = {
+					scores = true, -- show scores in the list
+				},
 				hidden = true,
 				follow = true,
 				ignored = true,
