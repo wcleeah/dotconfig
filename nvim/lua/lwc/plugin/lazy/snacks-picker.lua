@@ -11,7 +11,7 @@ return {
 					frecency = true,
 				},
 				debug = {
-					scores = false, -- show scores in the list
+					scores = true, -- show scores in the list
 				},
 			},
 		})
