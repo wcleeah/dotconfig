@@ -73,6 +73,8 @@ alt-s = 'workspace sound'
 alt-d = 'workspace database' 
 alt-g = 'workspace godspeed'
 alt-b = 'workspace heptabase'
+alt-x = 'workspace ghostty'
+alt-c = 'workspace arc-main'
 
 # Move windows between workspace
 alt-shift-1 = 'move-node-to-workspace main'
@@ -88,6 +90,8 @@ alt-shift-s = 'move-node-to-workspace sound'
 alt-shift-d = 'move-node-to-workspace database'
 alt-shift-g = 'move-node-to-workspace godspeed'
 alt-shift-b = 'move-node-to-workspace heptabase'
+alt-shift-x = 'move-node-to-workspace ghostty'
+alt-shift-c = 'move-node-to-workspace arc-main'
 
 # Go to last visited workspave
 alt-tab = 'workspace-back-and-forth'
@@ -121,7 +125,7 @@ run = 'layout floating'
 
 [[on-window-detected]]
 if.app-id = "com.mitchellh.ghostty"
-run = "layout floating"
+run = ["layout floating", "move-node-to-workspace ghostty"]
 
 # Force a bunch of apps to be in a ceretain workspace when it opens
 [[on-window-detected]]
