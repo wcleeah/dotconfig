@@ -60,7 +60,7 @@ alt-shift-minus = 'resize smart -200'
 alt-shift-equal = 'resize smart +200'
 
 # Switch between workspace
-alt-1 = 'workspace main'
+alt-z = 'workspace main'
 alt-2 = 'workspace secondary'
 alt-3 = 'workspace third'
 alt-4 = 'workspace four'
@@ -75,9 +75,10 @@ alt-g = 'workspace godspeed'
 alt-b = 'workspace heptabase'
 alt-x = 'workspace ghostty'
 alt-c = 'workspace arc-main'
+alt-r = 'workspace remarkable'
 
 # Move windows between workspace
-alt-shift-1 = 'move-node-to-workspace main'
+alt-shift-z = 'move-node-to-workspace main'
 alt-shift-2 = 'move-node-to-workspace secondary'
 alt-shift-3 = 'move-node-to-workspace third'
 alt-shift-4 = 'move-node-to-workspace four'
@@ -92,6 +93,7 @@ alt-shift-g = 'move-node-to-workspace godspeed'
 alt-shift-b = 'move-node-to-workspace heptabase'
 alt-shift-x = 'move-node-to-workspace ghostty'
 alt-shift-c = 'move-node-to-workspace arc-main'
+alt-shift-r = 'move-node-to-workspace remarkable'
 
 # Go to last visited workspave
 alt-tab = 'workspace-back-and-forth'
@@ -143,6 +145,10 @@ run = 'move-node-to-workspace godspeed'
 [[on-window-detected]]
 if.app-name-regex-substring = 'Heptabase'
 run = 'move-node-to-workspace heptabase'
+
+[[on-window-detected]]
+if.app-name-regex-substring = 'reMarkable'
+run = 'move-node-to-workspace remarkable'
 
 # Force messaging workspace to only be in the built in monitor
 # I often need to share screen on a TV, 
