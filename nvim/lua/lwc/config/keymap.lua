@@ -1,5 +1,6 @@
 -- Set the leader key to be space
 vim.g.mapleader = " "
+vim.g.maplocalleader = "  "
 
 -- Move the selected line up and down, with correct indenting
 -- config explained here https://www.perplexity.ai/search/vim-keymap-set-n-leader-xp-cmd-YM86TAndRKKXb5Q_V4a.PA#3

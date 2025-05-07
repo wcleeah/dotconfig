@@ -42,12 +42,22 @@ return {
 			}
 		end
 
+		local matcher = {
+			fuzzy = true, -- use fuzzy matching
+			smartcase = true, -- use smartcase
+			ignorecase = true, -- use ignorecase
+			sort_empty = false, -- sort results when the search string is empty
+			file_pos = true, -- support patterns like `file:line:col` and `file:line`
+			frecency = true, -- frecency bonus
+		}
+
 		local function no_insert()
 			vim.cmd.stopinsert()
 		end
 
 		-- Picker configuration
 
+		-- Grep related pickers
 		-- simple quick global search
 		-- this does not search the ignored files
 		-- for more complex and replace, use far
@@ -58,14 +68,7 @@ return {
 					scores = true, -- show scores in the list
 				},
 				cmd = "rg",
-				matcher = {
-					fuzzy = true, -- use fuzzy matching
-					smartcase = true, -- use smartcase
-					ignorecase = true, -- use ignorecase
-					sort_empty = false, -- sort results when the search string is empty
-					file_pos = true, -- support patterns like `file:line:col` and `file:line`
-					frecency = true, -- frecency bonus
-				},
+				matcher = matcher,
 			})
 		end, { desc = "Grep" })
 
@@ -79,17 +82,48 @@ return {
 				},
 				cmd = "rg",
 				on_show = no_insert,
-				matcher = {
-					fuzzy = true, -- use fuzzy matching
-					smartcase = true, -- use smartcase
-					ignorecase = true, -- use ignorecase
-					sort_empty = false, -- sort results when the search string is empty
-					file_pos = true, -- support patterns like `file:line:col` and `file:line`
-					frecency = true, -- frecency bonus
-				},
+				matcher = matcher,
 			})
 		end, { desc = "Grep" })
 
+		-- File related pickers
+		-- does not search ignored files
+		vim.keymap.set("n", "<leader>cso", function()
+			Snacks.picker.files({
+				format = custom_format,
+				hidden = true,
+				follow = true,
+				cmd = "rg",
+				matcher = matcher,
+			})
+		end, { desc = "File Search (git files + untracked)" })
+
+		-- search for all files
+		vim.keymap.set("n", "<leader>csa", function()
+			Snacks.picker.files({
+				format = custom_format,
+				hidden = true,
+				follow = true,
+				ignored = true,
+				cmd = "rg",
+				matcher = matcher,
+			})
+		end, { desc = "File Search (All)" })
+
+		-- search for logs related files
+		vim.keymap.set("n", "<leader>csl", function()
+			Snacks.picker.files({
+				format = custom_format,
+				hidden = true,
+				follow = true,
+				ignored = true,
+				cmd = "rg",
+				matcher = matcher,
+				dirs = { "log", "logs" },
+			})
+		end, { desc = "File Search (logs)" })
+
+		-- Misc pickers
 		-- buffer browser
 		vim.keymap.set("n", "<leader>csb", function()
 			Snacks.picker.buffers({
@@ -116,72 +150,6 @@ return {
 			})
 		end, { desc = "Command History" })
 
-		-- file browser
-		-- does not search ignored files
-		vim.keymap.set("n", "<leader>cso", function()
-			Snacks.picker.files({
-				format = custom_format,
-				debug = {
-					scores = true, -- show scores in the list
-				},
-				hidden = true,
-				follow = true,
-				cmd = "rg",
-				matcher = {
-					fuzzy = true, -- use fuzzy matching
-					smartcase = true, -- use smartcase
-					ignorecase = true, -- use ignorecase
-					sort_empty = false, -- sort results when the search string is empty
-					file_pos = true, -- support patterns like `file:line:col` and `file:line`
-					frecency = true, -- frecency bonus
-				},
-			})
-		end, { desc = "File Search (git files + untracked)" })
-
-		-- file browser
-		-- search for all files
-		vim.keymap.set("n", "<leader>csa", function()
-			Snacks.picker.files({
-				format = custom_format,
-				debug = {
-					scores = true, -- show scores in the list
-				},
-				hidden = true,
-				follow = true,
-				ignored = true,
-				cmd = "rg",
-				matcher = {
-					fuzzy = true, -- use fuzzy matching
-					smartcase = true, -- use smartcase
-					ignorecase = true, -- use ignorecase
-					sort_empty = false, -- sort results when the search string is empty
-					file_pos = true, -- support patterns like `file:line:col` and `file:line`
-					frecency = true, -- frecency bonus
-				},
-			})
-		end, { desc = "File Search (All)" })
-
-        -- file browser
-        -- search for logs related files
-		vim.keymap.set("n", "<leader>csl", function()
-			Snacks.picker.files({
-				format = custom_format,
-				hidden = true,
-				follow = true,
-				ignored = true,
-				cmd = "rg",
-				matcher = {
-					fuzzy = true, -- use fuzzy matching
-					smartcase = true, -- use smartcase
-					ignorecase = true, -- use ignorecase
-					sort_empty = false, -- sort results when the search string is empty
-					file_pos = true, -- support patterns like `file:line:col` and `file:line`
-					frecency = true, -- frecency bonus
-				},
-                dirs = { "log", "logs" },
-			})
-		end, { desc = "File Search (logs)" })
-
 		-- git branches
 		vim.keymap.set("n", "<leader>csg", function()
 			Snacks.picker.git_branches({})
@@ -191,17 +159,6 @@ return {
 		vim.keymap.set("n", "<leader>cskl", function()
 			Snacks.picker.keymaps({ pattern = "<Space>" })
 		end, { desc = "Keymaps" })
-
-		-- notifications
-		vim.keymap.set("n", "<leader>csn", function()
-			Snacks.picker.notifications({})
-		end, { desc = "Notifications" })
-
-		vim.keymap.set("n", "<leader>csh", function()
-			Snacks.picker.highlights({ pattern = "hl_group:^SnacksPicker" })
-		end, { desc = "Grep" })
-
-		-- highlight group custimization
 
 		-- there are a few highlight groups using the same color as my nvim background color, which is #000000
 		-- changing them to a light grey
