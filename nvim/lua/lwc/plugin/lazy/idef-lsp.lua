@@ -35,8 +35,8 @@ return {
 			require("conform").setup({
 				formatters_by_ft = {
 					-- Conform will run the first available formatter
-					javascript = { "biome", "prettierd", "prettier", stop_after_first = true },
-					typescript = { "biome", "prettierd", "prettier", stop_after_first = true },
+					javascript = { "prettierd", "prettier", },
+					typescript = { "prettierd", "prettier", },
 					go = { "gofmt" },
 					tf = { "terraform_fmt" },
 					rust = { "rustfmt" },

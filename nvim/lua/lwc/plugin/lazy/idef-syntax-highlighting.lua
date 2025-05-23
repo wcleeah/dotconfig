@@ -57,7 +57,7 @@ return {
 		},
 		config = function()
 			require("treesitter-context").setup({
-				enable = true,
+				enable = false,
 			})
 			vim.keymap.set("n", "<leader>b", function()
 				require("treesitter-context").go_to_context(vim.v.count1)
