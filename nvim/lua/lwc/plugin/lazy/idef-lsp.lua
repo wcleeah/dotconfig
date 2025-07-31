@@ -16,15 +16,34 @@ return {
 		keys = {
             -- Trigger the trouble window for all diagnostics across all files
 			{
-				"<leader>xx",
+				"<leader>dd",
+				"<cmd>Trouble diagnostics toggle filter.severity=vim.diagnostic.severity.ERROR<cr>",
+				desc = "Diagnostics Error Only (Trouble)",
+			},
+			{
+				"<leader>da",
 				"<cmd>Trouble diagnostics toggle<cr>",
-				desc = "Diagnostics (Trouble)",
+				desc = "Diagnostics All (Trouble)",
 			},
             -- Trigger the trouble window for diagnostics in the current buffer
 			{
-				"<leader>xl",
+				"<leader>dl",
 				"<cmd>Trouble diagnostics toggle filter.buf=0<cr>",
 				desc = "Buffer Diagnostics (Trouble)",
+			},
+			{
+				"<leader>dn",
+                function()
+                    vim.diagnostic.goto_next({ scope = 'workspace' })
+                end,
+				desc = "Go to next item",
+			},
+			{
+				"<leader>dp",
+                function()
+                    vim.diagnostic.goto_prev({ scope = 'workspace' })
+                end,
+				desc = "Go to previous item",
 			},
 		},
 	},
@@ -44,6 +63,7 @@ return {
 					lua = { "stylua" },
                     sql = { "pgformatter" },
 					python = { "black" },
+                    html = { "htmlbeautifier" },
 				},
 			})
 			vim.keymap.set(
