@@ -21,6 +21,9 @@ return {
 				},
 				-- Delete the file to macos trash instead of permanently deleting
 				delete_to_trash = true,
+                lsp_file_methods = {
+                    enabled = false
+                }
 			})
 
             -- Open oil / go back to the parent directory
