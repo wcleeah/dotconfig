@@ -5,7 +5,6 @@ gui:
 git:
   autoFetch: false
   localBranchSortOrder: recency
-confirmOnQuit: true
 keybinding:
   prevBlock: <c-p>
   nextBlock: <c-n>
