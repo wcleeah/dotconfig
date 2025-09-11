@@ -40,3 +40,5 @@ vim.opt.isfname:append("@-@")
 
 -- Make neovim faster i guess
 vim.opt.updatetime = 50
+
+vim.opt.winborder = "rounded"

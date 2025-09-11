@@ -34,6 +34,18 @@ return {
 				vim.cmd.checktime()
 				require("oil.actions").refresh.callback()
 			end)
+            local M = require("snacks.picker.core.main")
+            M.new = function(opts)
+                opts = vim.tbl_extend("force", {
+                    float = false,
+                    file = true,
+                    current = false,
+                }, opts or {})
+                local self = setmetatable({}, M)
+                self.opts = opts
+                self.win = vim.api.nvim_get_current_win()
+                return self
+            end
 		end,
 	},
 	-- Crazy find and replace plugin
@@ -122,20 +134,5 @@ return {
 				require("telescope").extensions.diff.diff_files({ hidden = true, no_ignore = true })
 			end, { desc = "Compare 2 files" })
 		end,
-	},
-    {
-        "mistweaverco/kulala.nvim",
-        keys = {
-            { "<leader>hs", desc = "Send request" },
-            { "<leader>ha", desc = "Send all requests" },
-            { "<leader>hb", desc = "Open scratchpad" },
-        },
-        ft = {"http", "rest"},
-        opts = {
-            -- your configuration comes here
-            global_keymaps = false,
-            global_keymaps_prefix = "<leader>R",
-            kulala_keymaps_prefix = "",
-        },
-    },
+	}
 }
