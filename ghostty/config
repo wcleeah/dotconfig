@@ -27,9 +27,7 @@ adjust-cell-height = 10%
 
 # Keybindings
 # Window managemenr
-keybind = ctrl+]=new_split:right
-keybind = ctrl+[=new_split:left
-keybind = ctrl+shift+]=new_split:down
-keybind = ctrl+shift+[=new_split:up
-keybind = opt+shift+]=goto_split:right
-keybind = opt+shift+[=goto_split:left
+keybind = cmd+]=new_split:right
+keybind = cmd+[=new_split:left
+keybind = cmd+shift+]=goto_split:right
+keybind = cmd+shift+[=goto_split:left

@@ -3,6 +3,7 @@ This repo stores all my config for different clis
 
 ## Installation
 - Clone the repo to the ~/.config directory
+- `git submodule update --init --recursive`
 
 ## The configs
 - nvim

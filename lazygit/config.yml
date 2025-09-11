@@ -2,6 +2,7 @@ gui:
   wrapLinesInStagingView: false
   showFileTree: false
   showNumstatInFilesView: true
+  mainPanelSplitMode: "horizontal"
 git:
   autoFetch: false
   localBranchSortOrder: recency

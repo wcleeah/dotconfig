@@ -7,12 +7,7 @@ bind C-t send-prefix
 
 # Display pop-up related
 # Open a zsh pop-up
-bind z display-popup \
-  -d "#{pane_current_path}" \
-  -w 75% \
-  -h 75% \
-  -E "zsh"
-
+bind z display-popup 
 # Open a pop-up that runs node
 bind j display-popup \
   -d "#{pane_current_path}" \
