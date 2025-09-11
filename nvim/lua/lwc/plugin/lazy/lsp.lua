@@ -1,5 +1,5 @@
 -- This file focuses on lsp related functions
--- This is the second iteration of my lsp setup in neovim
+-- This is the third iteration of my lsp setup in neovim
 -- It is quite amazing that with nvim v0.11.0, lsp has became much easier to setup
 return {
 	-- A data repository, that stores all the config data for nvim lsp to start with
