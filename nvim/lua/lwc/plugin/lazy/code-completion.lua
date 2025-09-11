@@ -25,13 +25,6 @@ return {
 			})
 		end,
 	},
-	-- Best ai completion tool
-	{
-		"supermaven-inc/supermaven-nvim",
-		config = function()
-			require("supermaven-nvim").setup({})
-		end,
-	},
 	-- It provides the code completion popup with much more information, like function sign, type etc.
 	-- The only downside is that it always override my hl group setting.
 	{
@@ -52,9 +45,9 @@ return {
 		version = "1.*",
 		config = function()
 			require("blink.cmp").setup({
-				keymap = { preset = "enter" },
+				keymap = { preset = "default" },
 				sources = {
-					default = { "lsp", "path", "buffer" },
+					default = { "lsp", "path" },
 				},
 				fuzzy = { implementation = "prefer_rust" },
                 -- The popup menu is so ugly, i don't want to use it in noice's command palette 

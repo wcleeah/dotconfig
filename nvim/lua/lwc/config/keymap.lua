@@ -36,20 +36,30 @@ vim.keymap.set("n", "<leader>j", "<cmd>lprev<CR>zz")
 
 -- Quick search and replace the selected word / the characters selected in visual mode
 vim.keymap.set("n", "<leader>s", [[:%s/\<<C-r><C-w>\>/<C-r><C-w>/gI<Left><Left><Left>]])
-vim.keymap.set("v", "<leader>s", [[:%s/\<<C-r><C-w>\>/<C-r><C-w>/gI<Left><Left><Left>]])
 
 -- splits and window management
-vim.keymap.set({"n", "v"}, "<leader>wh", "<c-w>h")
-vim.keymap.set({"n", "v"}, "<leader>wl", "<c-w>l")
-vim.keymap.set({"n", "v"}, "<leader>wj", "<c-w>j")
-vim.keymap.set({"n", "v"}, "<leader>wk", "<c-w>k")
-vim.keymap.set({"n", "v"}, "<leader>wv", "<c-w>v")
-vim.keymap.set({"n", "v"}, "<leader>wa", "<c-w>>")
-vim.keymap.set({"n", "v"}, "<leader>wd", "<c-w><")
+vim.keymap.set({ "n", "v" }, "<leader>wh", "<c-w>h")
+vim.keymap.set({ "n", "v" }, "<leader>wl", "<c-w>l")
+vim.keymap.set({ "n", "v" }, "<leader>wj", "<c-w>j")
+vim.keymap.set({ "n", "v" }, "<leader>wk", "<c-w>k")
+vim.keymap.set({ "n", "v" }, "<leader>wv", "<c-w>v")
+vim.keymap.set({ "n", "v" }, "<leader>wa", "<c-w>>")
+vim.keymap.set({ "n", "v" }, "<leader>wd", "<c-w><")
 
 -- Copy to system clipboard
-vim.keymap.set({"n", "v"}, "<leader>y", [["+y]])
+vim.keymap.set({ "n", "v" }, "<leader>y", [["+y]])
 
 -- Call tmux to switch tmux session
 vim.keymap.set("n", "<C-f>", "<cmd>silent !tmux neww tmux-sessionizer<CR>")
 vim.keymap.set("n", "<C-n>", "<cmd>silent !tmux neww tmux-session-switcher<CR>")
+
+-- LSP related
+vim.keymap.set("n", "<leader>lh", "<cmd>lua vim.lsp.buf.hover()<cr>")
+vim.keymap.set("n", "<leader>ld", "<cmd>lua vim.lsp.buf.definition()<cr>")
+vim.keymap.set("n", "<leader>lr", "<cmd>lua vim.lsp.buf.references()<cr>")
+vim.keymap.set("n", "<leader>ls", "<cmd>lua vim.lsp.buf.signature_help()<cr>")
+vim.keymap.set("n", "<leader>le", "<cmd>lua vim.diagnostic.open_float()<cr>")
+vim.keymap.set("n", "<leader>la", "<cmd>lua vim.lsp.buf.code_action()<cr>")
+vim.keymap.set("n", "<leader>lp", "<cmd>checkhealth vim.lsp<cr>")
+vim.keymap.set("n", "<leader>xn", "<cmd>lua vim.diagnostic.goto_next()<CR>", { noremap = true, silent = true })
+vim.keymap.set("n", "<leader>xp", "<cmd>lua vim.diagnostic.goto_prev()<CR>", { noremap = true, silent = true })
