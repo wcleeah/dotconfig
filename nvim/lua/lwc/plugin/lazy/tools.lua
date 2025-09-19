@@ -21,31 +21,31 @@ return {
 				},
 				-- Delete the file to macos trash instead of permanently deleting
 				delete_to_trash = true,
-                lsp_file_methods = {
-                    enabled = false
-                }
+				lsp_file_methods = {
+					enabled = false,
+				},
 			})
 
-            -- Open oil / go back to the parent directory
+			-- Open oil / go back to the parent directory
 			vim.keymap.set("n", "<leader>fs", "<CMD>Oil<CR>", { desc = "Open parent directory" })
 			-- Force neovim to sync all opened buffers with external changes
-            -- Adding the keymap here coz i need oil to be loaded to call refresh
+			-- Adding the keymap here coz i need oil to be loaded to call refresh
 			vim.keymap.set("n", "<leader>r", function()
 				vim.cmd.checktime()
 				require("oil.actions").refresh.callback()
 			end)
-            local M = require("snacks.picker.core.main")
-            M.new = function(opts)
-                opts = vim.tbl_extend("force", {
-                    float = false,
-                    file = true,
-                    current = false,
-                }, opts or {})
-                local self = setmetatable({}, M)
-                self.opts = opts
-                self.win = vim.api.nvim_get_current_win()
-                return self
-            end
+			local M = require("snacks.picker.core.main")
+			M.new = function(opts)
+				opts = vim.tbl_extend("force", {
+					float = false,
+					file = true,
+					current = false,
+				}, opts or {})
+				local self = setmetatable({}, M)
+				self.opts = opts
+				self.win = vim.api.nvim_get_current_win()
+				return self
+			end
 		end,
 	},
 	-- Crazy find and replace plugin
@@ -134,5 +134,5 @@ return {
 				require("telescope").extensions.diff.diff_files({ hidden = true, no_ignore = true })
 			end, { desc = "Compare 2 files" })
 		end,
-	}
+	},
 }
