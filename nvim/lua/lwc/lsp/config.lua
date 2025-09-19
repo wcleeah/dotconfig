@@ -1,13 +1,13 @@
--- add notification when a lsp server is attached or detached 
+-- add notification when a lsp server is attached or detached
 vim.api.nvim_create_autocmd("LspAttach", {
-    callback = function()
-        vim.notify("Lsp Attached")
-    end
+	callback = function()
+		vim.notify("Lsp Attached")
+	end,
 })
 vim.api.nvim_create_autocmd("LspDetach", {
-    callback = function()
-        vim.notify("Lsp Detached")
-    end
+	callback = function()
+		vim.notify("Lsp Detached")
+	end,
 })
 
 -- dianostic information ui configuration
@@ -25,9 +25,9 @@ vim.diagnostic.config({
 vim.lsp.config("lua_ls", {
 	settings = {
 		Lua = {
-            workspace = {
-                library = vim.api.nvim_get_runtime_file("", true),
-            }
+			workspace = {
+				library = vim.api.nvim_get_runtime_file("", true),
+			},
 		},
 	},
 })
