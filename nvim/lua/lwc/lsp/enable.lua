@@ -4,6 +4,8 @@ local lsps = {
 	"ts_ls",
 	"nextls", -- elixir
 	"just", -- justfile
+	"html",
+	"emmet_language_server",
 }
 
 vim.lsp.enable(lsps)
