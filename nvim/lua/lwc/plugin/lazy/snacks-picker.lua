@@ -157,7 +157,9 @@ return {
 
 		-- keymaps starts with my leader, which is space
 		vim.keymap.set("n", "<leader>cskl", function()
-			Snacks.picker.keymaps({ pattern = "<Space>" })
+			Snacks.picker.keymaps({ pattern = "<Space>", matcher = {
+                fuzzy = false
+            }})
 		end, { desc = "Keymaps" })
 
 		-- there are a few highlight groups using the same color as my nvim background color, which is #000000
