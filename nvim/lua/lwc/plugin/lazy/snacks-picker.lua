@@ -156,7 +156,7 @@ return {
 		end, { desc = "Git Branches" })
 
 		-- keymaps starts with my leader, which is space
-		vim.keymap.set("n", "<leader>cskl", function()
+		vim.keymap.set("n", "<leader>csk", function()
 			Snacks.picker.keymaps({ pattern = "<Space>", matcher = {
                 fuzzy = false
             }})

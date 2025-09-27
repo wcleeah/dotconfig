@@ -15,8 +15,8 @@ return {
 			require("conform").setup({
 				formatters_by_ft = {
 					-- Conform will run the first available formatter
-					javascript = { "prettierd", "prettier" },
-					typescript = { "prettierd", "prettier" },
+					javascript = { "biome", "prettierd", "prettier", stop_after_first = true },
+					typescript = { "biome", "prettierd", "prettier", stop_after_first = true },
 					html = { "prettierd", "prettier" },
 					jsx = { "prettierd", "prettier" },
 					tsx = { "prettierd", "prettier" },
@@ -28,6 +28,7 @@ return {
 					sql = { "pgformatter" },
 					python = { "black" },
 					elixir = { "mix" },
+					json = { "biome" },
 				},
 			})
 			vim.keymap.set({ "n", "v" }, "<leader>f", function()

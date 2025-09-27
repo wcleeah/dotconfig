@@ -48,11 +48,18 @@ vim.lsp.config("nextls", {
 })
 
 -- JS / TS
--- Somehow the maintainer decided all JS/TS project will have a lock file, fuck you
+-- Somehow the maintainer decide all JS/TS project will have a lock file, fuck you
 vim.lsp.config("ts_ls", {
 	root_dir = function(bufnr, on_dir)
 		local project_root = vim.fs.root(bufnr, ".git") or vim.fn.getcwd()
 
 		on_dir(project_root)
 	end,
+	init_options = {
+		preferences = {
+			importModuleSpecifierEnding = "js",
+			includeCompletionsForModuleExports = true,
+			includeCompletionsForImportStatements = true,
+		},
+	},
 })
