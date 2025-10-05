@@ -74,6 +74,7 @@ alt-v = 'workspace heptabase'
 alt-x = 'workspace ghostty'
 alt-c = 'workspace arc-main'
 alt-r = 'workspace remarkable'
+alt-f = 'workspace finder'
 
 # Move windows between workspace
 alt-shift-z = 'move-node-to-workspace main'
@@ -90,6 +91,7 @@ alt-shift-v = 'move-node-to-workspace heptabase'
 alt-shift-x = 'move-node-to-workspace ghostty'
 alt-shift-c = 'move-node-to-workspace arc-main'
 alt-shift-r = 'move-node-to-workspace remarkable'
+alt-shift-f = 'move-node-to-workspace finder'
 
 # Go to last visited workspave
 alt-tab = 'workspace-back-and-forth'
@@ -145,6 +147,10 @@ run = 'move-node-to-workspace heptabase'
 [[on-window-detected]]
 if.app-name-regex-substring = 'reMarkable'
 run = 'move-node-to-workspace remarkable'
+
+[[on-window-detected]]
+if.app-name-regex-substring = 'Finder'
+run = 'move-node-to-workspace finder'
 
 # Force messaging workspace to only be in the built in monitor
 # I often need to share screen on a TV, 
