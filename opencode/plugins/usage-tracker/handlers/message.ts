@@ -4,7 +4,7 @@ import type {
     AssistantMessage,
     UserMessage,
     OpencodeClient,
-    TextPart,
+    Part,
 } from "@opencode-ai/sdk";
 import type { PluginState } from "../types";
 import { getCurrentTurnID } from "../state";
@@ -24,15 +24,68 @@ async function fetchMessageContent(
             return null;
         }
 
-        // Extract text content from text parts only
-        const textParts = result.data.parts.filter(
-            (p): p is TextPart => p.type === "text",
-        );
-        if (textParts.length === 0) {
-            return null;
+        const contents: string[] = [];
+
+        for (const part of result.data.parts) {
+            switch (part.type) {
+                case "text":
+                    contents.push(`[Text: ${part.text}]`);
+                    break;
+                case "reasoning":
+                    contents.push(`[Reasoning: ${part.text}]`);
+                    break;
+                case "subtask":
+                    contents.push(`[Subtask: ${part.description || part.prompt}]`);
+                    break;
+                case "file":
+                    contents.push(`[File: ${part.filename || part.url}]`);
+                    break;
+                case "tool":
+                    const status = part.state.status;
+                    const details =
+                        part.state.status === "completed"
+                            ? part.state.title ||
+                              JSON.stringify(part.state.input || {})
+                            : status;
+                    contents.push(`[Tool: ${part.tool}] ${details}`);
+                    break;
+                case "step-start":
+                    contents.push(
+                        `[Step started${
+                            part.snapshot
+                                ? `: ${part.snapshot.slice(0, 20)}...`
+                                : ""
+                        }]`,
+                    );
+                    break;
+                case "step-finish":
+                    contents.push(`[Step finished: ${part.reason}]`);
+                    break;
+                case "snapshot":
+                    contents.push(
+                        `[Snapshot: ${part.snapshot.slice(0, 30)}...]`,
+                    );
+                    break;
+                case "patch":
+                    contents.push(`[Patch: ${part.files.join(", ")}]`);
+                    break;
+                case "agent":
+                    contents.push(`[Agent: ${part.name}]`);
+                    break;
+                case "retry":
+                    contents.push(
+                        `[Retry attempt ${part.attempt}: ${part.error?.message || "unknown error"}]`,
+                    );
+                    break;
+                case "compaction":
+                    contents.push(`[Context compacted. Auto: ${part.auto}]`);
+                    break;
+                default:
+                    contents.push(`[${(part as Part).type}]`);
+            }
         }
 
-        return textParts.map((p) => p.text).join("");
+        return contents.length > 0 ? contents.join("\n") : null;
     } catch (err) {
         console.error("Failed to fetch message content:", err);
         return null;
