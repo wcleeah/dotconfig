@@ -125,7 +125,7 @@ run = 'layout floating'
 
 [[on-window-detected]]
 if.app-id = "com.mitchellh.ghostty"
-run = ["layout floating", "move-node-to-workspace ghostty"]
+run = ["move-node-to-workspace ghostty"]
 
 # Force a bunch of apps to be in a ceretain workspace when it opens
 [[on-window-detected]]
