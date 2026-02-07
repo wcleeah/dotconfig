@@ -46,37 +46,16 @@ CREATE TABLE IF NOT EXISTS messages (
   finish_reason TEXT
 );
 
--- Tool executions
-CREATE TABLE IF NOT EXISTS tool_calls (
+-- Parts (all message parts - text, tool, reasoning, file, etc.)
+CREATE TABLE IF NOT EXISTS parts (
   id TEXT PRIMARY KEY,
+  message_id TEXT NOT NULL,
   session_id TEXT NOT NULL,
-  turn_id TEXT,
-  message_id TEXT,
-  tool_name TEXT NOT NULL,
-  args_json TEXT,
-  started_at INTEGER NOT NULL,
-  completed_at INTEGER,
-  duration_ms INTEGER,
-  success INTEGER,
-  error_message TEXT,
-  output_metadata TEXT,
-  input_tokens INTEGER,
-  output_tokens INTEGER,
-  reasoning_tokens INTEGER,
-  cache_read_tokens INTEGER,
-  cache_write_tokens INTEGER,
-  cost REAL
-);
-
--- Compactions
-CREATE TABLE IF NOT EXISTS compactions (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  session_id TEXT NOT NULL,
-  part_id TEXT,
-  message_id TEXT,
-  is_auto INTEGER,
-  started_at INTEGER NOT NULL,
-  completed_at INTEGER
+  part_index INTEGER NOT NULL,
+  type TEXT NOT NULL,
+  data TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  ended_at INTEGER
 );
 
 -- Error/data loss log
@@ -101,13 +80,11 @@ CREATE INDEX IF NOT EXISTS idx_messages_turn ON messages(turn_id);
 CREATE INDEX IF NOT EXISTS idx_messages_model ON messages(model_id);
 CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at);
 CREATE INDEX IF NOT EXISTS idx_messages_agent ON messages(agent);
-CREATE INDEX IF NOT EXISTS idx_tool_calls_session ON tool_calls(session_id);
-CREATE INDEX IF NOT EXISTS idx_tool_calls_turn ON tool_calls(turn_id);
-CREATE INDEX IF NOT EXISTS idx_tool_calls_tool ON tool_calls(tool_name);
-CREATE INDEX IF NOT EXISTS idx_tool_calls_started ON tool_calls(started_at);
+CREATE INDEX IF NOT EXISTS idx_parts_message ON parts(message_id);
+CREATE INDEX IF NOT EXISTS idx_parts_session ON parts(session_id);
+CREATE INDEX IF NOT EXISTS idx_parts_type ON parts(type);
+CREATE INDEX IF NOT EXISTS idx_parts_created ON parts(created_at);
 CREATE INDEX IF NOT EXISTS idx_errors_timestamp ON plugin_errors(timestamp);
-CREATE INDEX IF NOT EXISTS idx_compactions_session ON compactions(session_id);
-CREATE INDEX IF NOT EXISTS idx_compactions_started ON compactions(started_at);
 `
 
 export const initDatabase = (dbPath: string): Database => {

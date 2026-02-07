@@ -8,3 +8,4 @@ simple-update-notifier/
 .idea/
 tmux/plugins/*
 !tmux/plugins/tpm
+.wrangler/

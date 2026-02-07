@@ -117,67 +117,14 @@ export const onSessionDeleted = (
     const newSessionToParentTurn = new Map(state.sessionToParentTurn)
     newSessionToParentTurn.delete(session.id)
 
-    const newCompactingSessions = new Map(state.compactingSessions)
-    newCompactingSessions.delete(session.id)
-
     return {
       ...state,
       sessionParentIDs: newSessionParentIDs,
       activeTurns: newActiveTurns,
       sessionToParentTurn: newSessionToParentTurn,
-      compactingSessions: newCompactingSessions,
     }
   } catch (err) {
     logError(db, "session.deleted", session, err)
-    return state
-  }
-}
-
-export const onSessionCompacting = (
-  db: Database,
-  state: PluginState,
-  sessionID: string
-): PluginState => {
-  try {
-    const result = db.prepare(`
-      INSERT INTO compactions (session_id, started_at)
-      VALUES (?, ?)
-    `).run(sessionID, Date.now())
-
-    const compactionRowID = result.lastInsertRowid as number
-
-    return {
-      ...state,
-      compactingSessions: new Map(state.compactingSessions).set(sessionID, compactionRowID),
-    }
-  } catch (err) {
-    logError(db, "session.compacting", { sessionID }, err)
-    return state
-  }
-}
-
-export const onSessionCompacted = (
-  db: Database,
-  state: PluginState,
-  sessionID: string
-): PluginState => {
-  try {
-    const compactionRowID = state.compactingSessions.get(sessionID)
-    if (compactionRowID) {
-      db.prepare(`
-        UPDATE compactions SET completed_at = ? WHERE id = ?
-      `).run(Date.now(), compactionRowID)
-    }
-
-    const newCompactingSessions = new Map(state.compactingSessions)
-    newCompactingSessions.delete(sessionID)
-
-    return {
-      ...state,
-      compactingSessions: newCompactingSessions,
-    }
-  } catch (err) {
-    logError(db, "session.compacted", { sessionID }, err)
     return state
   }
 }
