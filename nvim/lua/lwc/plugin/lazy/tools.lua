@@ -13,7 +13,6 @@ return {
 				-- Configure how each file/directory is displayed
 				columns = {
 					"icon",
-					"mtime",
 				},
 				-- Show hidden files
 				view_options = {
@@ -24,6 +23,9 @@ return {
 				lsp_file_methods = {
 					enabled = false,
 				},
+                keymaps = {
+                    ["_"] = false,
+                }
 			})
 
 			-- Open oil / go back to the parent directory
@@ -134,5 +136,8 @@ return {
 				require("telescope").extensions.diff.diff_files({ hidden = true, no_ignore = true })
 			end, { desc = "Compare 2 files" })
 		end,
+	},
+	{
+		"folke/snacks.nvim",
 	},
 }

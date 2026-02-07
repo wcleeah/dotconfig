@@ -57,9 +57,9 @@ vim.lsp.config("ts_ls", {
 	end,
 	init_options = {
 		preferences = {
-			importModuleSpecifierEnding = "js",
 			includeCompletionsForModuleExports = true,
 			includeCompletionsForImportStatements = true,
 		},
 	},
 })
+

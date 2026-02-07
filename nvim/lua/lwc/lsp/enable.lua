@@ -6,7 +6,9 @@ local lsps = {
 	"just", -- justfile
 	"html",
 	"emmet_language_server",
-    "pyright",
+    "basedpyright",
+    "vacuum",
+    "biome"
 }
 
 vim.lsp.enable(lsps)

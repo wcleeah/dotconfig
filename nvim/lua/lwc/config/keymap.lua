@@ -50,8 +50,8 @@ vim.keymap.set({ "n", "v" }, "<leader>wd", "<c-w><")
 vim.keymap.set({ "n", "v" }, "<leader>y", [["+y]])
 
 -- Call tmux to switch tmux session
-vim.keymap.set("n", "<C-f>", "<cmd>silent !tmux neww tmux-sessionizer<CR>")
-vim.keymap.set("n", "<C-n>", "<cmd>silent !tmux neww tmux-session-switcher<CR>")
+vim.keymap.set("n", "<C-n>", "<cmd>silent !tmux neww tmux-sessionizer<CR>")
+vim.keymap.set("n", "<C-f>", "<cmd>silent !tmux neww tmux-session-switcher<CR>")
 
 -- LSP related
 vim.keymap.set("n", "<leader>lh", "<cmd>lua vim.lsp.buf.hover()<cr>")
