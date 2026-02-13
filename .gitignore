@@ -9,3 +9,4 @@ simple-update-notifier/
 tmux/plugins/*
 !tmux/plugins/tpm
 .wrangler/
+htstudio/
