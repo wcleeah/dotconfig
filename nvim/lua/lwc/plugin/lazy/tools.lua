@@ -23,9 +23,9 @@ return {
 				lsp_file_methods = {
 					enabled = false,
 				},
-                keymaps = {
-                    ["_"] = false,
-                }
+				keymaps = {
+					["_"] = false,
+				},
 			})
 
 			-- Open oil / go back to the parent directory
@@ -139,5 +139,33 @@ return {
 	},
 	{
 		"folke/snacks.nvim",
+	},
+	{
+		"git@github.com:wcleeah/day-record-plugin.git",
+		name = "day-record.nvim",
+		dependencies = { "folke/snacks.nvim", "stevearc/oil.nvim", "saghen/blink.cmp" },
+		opts = {
+			tags = {
+				"Programming",
+				"Vibe Coding",
+				"Job Hunting",
+				"Friends",
+				"Family",
+				"Touchgrass",
+				"KContent",
+				"Rocket League",
+				"Hehe",
+				"Music Appreciation",
+				"Ferry",
+				"Cooking",
+				"Hojicha",
+			},
+		},
+		config = function(_, opts)
+			local ok, mod = pcall(require, "day-record")
+			if ok then
+				mod.setup(opts)
+			end
+		end,
 	},
 }
