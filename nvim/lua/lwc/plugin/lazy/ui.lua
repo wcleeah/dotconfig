@@ -89,7 +89,7 @@ return {
 		config = function()
 			require("monokai-pro").setup({
 				-- Override the background color to pure black
-				overridePalette = function(_)
+				override_palette = function(_)
 					return {
 						background = "#000000",
 					}
