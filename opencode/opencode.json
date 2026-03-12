@@ -21,6 +21,11 @@
             "type": "remote",
             "enabled": true,
             "url": "https://mcp.grep.app"
+        },
+        "exa": {
+            "type": "remote",
+            "url": "https://mcp.exa.ai/mcp?exaApiKey=92ca7124-5d5e-4c20-ba1a-ff7c718ece45",
+            "enabled": true
         }
     }
 }

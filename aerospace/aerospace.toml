@@ -148,10 +148,6 @@ run = 'move-node-to-workspace heptabase'
 if.app-name-regex-substring = 'reMarkable'
 run = 'move-node-to-workspace remarkable'
 
-[[on-window-detected]]
-if.app-name-regex-substring = 'Finder'
-run = 'move-node-to-workspace finder'
-
 # Force messaging workspace to only be in the built in monitor
 # I often need to share screen on a TV, 
 # and aerospace always move my messaging workspace to the TV monitor.
