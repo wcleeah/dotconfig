@@ -245,6 +245,84 @@ describe('normalizeEvent', () => {
     })
   })
 
+  it('does not let synthetic user attachment text overwrite the real user prompt', () => {
+    const state = createTrackerState({ id: 'proj_1' })
+
+    normalizeEvent(
+      {
+        type: 'session.created',
+        properties: {
+          info: {
+            id: 'ses_root',
+            projectID: 'proj_1',
+            slug: 'root',
+            directory: '/tmp/project',
+            title: 'Root session',
+            version: '1.0.0',
+            time: { created: 1000, updated: 1000 },
+          },
+        },
+      },
+      state,
+    )
+
+    normalizeEvent(
+      {
+        type: 'message.updated',
+        properties: {
+          info: {
+            id: 'msg_user',
+            role: 'user',
+            sessionID: 'ses_root',
+            time: { created: 2000 },
+          },
+        },
+      },
+      state,
+    )
+
+    normalizeEvent(
+      {
+        type: 'message.part.updated',
+        properties: {
+          part: {
+            id: 'part_user_text',
+            type: 'text',
+            messageID: 'msg_user',
+            sessionID: 'ses_root',
+            text: 'trace every path',
+            time: { start: 2010, updated: 2010 },
+          },
+        },
+      },
+      state,
+    )
+
+    const syntheticAttachment = normalizeEvent(
+      {
+        type: 'message.part.updated',
+        properties: {
+          part: {
+            id: 'part_attachment_text',
+            type: 'text',
+            messageID: 'msg_user',
+            sessionID: 'ses_root',
+            text: '<path>/tmp/file</path>\n<content>expanded file</content>',
+            synthetic: true,
+            time: { start: 2020, updated: 2020 },
+          },
+        },
+      },
+      state,
+    )
+
+    expect(syntheticAttachment.facts.turns[0]).toMatchObject({
+      id: 'msg_user',
+      content: 'trace every path',
+      synthetic: 0,
+    })
+  })
+
   it('uses the step-start id as the canonical step id', () => {
     const state = createTrackerState({ id: 'proj_1' })
 

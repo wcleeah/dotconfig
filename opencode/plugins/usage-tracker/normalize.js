@@ -28,12 +28,41 @@ function sessionSummary(summary) {
  */
 export function mergeTurnRows(existing, next) {
   if (!existing) return next
+  const existingHasContent = existing.content !== null && existing.content !== undefined
+  const nextHasContent = next.content !== null && next.content !== undefined
+  const existingSynthetic = existing.synthetic ?? 0
+  const nextSynthetic = next.synthetic ?? 0
+  const existingCompaction = existing.compaction ?? 0
+  const nextCompaction = next.compaction ?? 0
+
+  let content = existing.content ?? null
+  if (nextHasContent) {
+    if (nextSynthetic === 0) {
+      content = next.content
+    } else if (!existingHasContent || existingSynthetic === 1) {
+      content = next.content
+    }
+  }
+
+  let synthetic = existingSynthetic
+  if (nextCompaction === 1 || existingCompaction === 1) {
+    synthetic = 1
+  } else if (nextHasContent) {
+    if (nextSynthetic === 0) {
+      synthetic = 0
+    } else if (!existingHasContent || existingSynthetic === 1) {
+      synthetic = 1
+    }
+  } else {
+    synthetic = Math.max(existingSynthetic, nextSynthetic)
+  }
+
   return {
     ...existing,
     ...next,
-    content: next.content ?? existing.content,
-    synthetic: Math.max(existing.synthetic ?? 0, next.synthetic ?? 0),
-    compaction: Math.max(existing.compaction ?? 0, next.compaction ?? 0),
+    content,
+    synthetic,
+    compaction: Math.max(existingCompaction, nextCompaction),
     undone_at: next.undone_at ?? existing.undone_at,
     time_created: Math.min(existing.time_created ?? next.time_created, next.time_created ?? existing.time_created),
     time_updated: Math.max(existing.time_updated ?? next.time_updated, next.time_updated ?? existing.time_updated),
