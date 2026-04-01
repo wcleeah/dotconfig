@@ -413,6 +413,117 @@ describe('normalizeEvent', () => {
     )
 
     expect(removed.touched.days).toEqual(['2026-01-03', '2026-01-01'])
+    expect(removed.touched.projectDayKeys).toEqual([
+      ['2026-01-03', 'proj_1'],
+      ['2026-01-01', 'proj_1'],
+    ])
+  })
+
+  it('touches both old and new tool day buckets when a tool call shifts days', () => {
+    const state = createTrackerState({ id: 'proj_1' })
+
+    normalizeEvent(
+      {
+        type: 'session.created',
+        properties: {
+          info: {
+            id: 'ses_root',
+            projectID: 'proj_1',
+            slug: 'root',
+            directory: '/tmp/project',
+            title: 'Root session',
+            version: '1.0.0',
+            time: { created: 1000, updated: 1000 },
+          },
+        },
+      },
+      state,
+    )
+
+    normalizeEvent(
+      {
+        type: 'message.updated',
+        properties: {
+          info: {
+            id: 'msg_user',
+            role: 'user',
+            sessionID: 'ses_root',
+            time: { created: Date.UTC(2026, 0, 1, 10) },
+          },
+        },
+      },
+      state,
+    )
+
+    normalizeEvent(
+      {
+        type: 'message.updated',
+        properties: {
+          info: {
+            id: 'msg_assistant',
+            role: 'assistant',
+            parentID: 'msg_user',
+            sessionID: 'ses_root',
+            providerID: 'github-copilot',
+            modelID: 'gpt-5.4',
+            finish: 'tool-calls',
+            time: { created: Date.UTC(2026, 0, 1, 10, 1), completed: Date.UTC(2026, 0, 1, 10, 2) },
+          },
+        },
+      },
+      state,
+    )
+
+    normalizeEvent(
+      {
+        type: 'message.part.updated',
+        properties: {
+          part: {
+            id: 'tool_1',
+            type: 'tool',
+            messageID: 'msg_assistant',
+            sessionID: 'ses_root',
+            callID: 'call_1',
+            tool: 'read',
+            state: {
+              status: 'completed',
+              time: { start: Date.UTC(2026, 0, 1, 10, 3), end: Date.UTC(2026, 0, 1, 10, 4) },
+            },
+          },
+        },
+      },
+      state,
+    )
+
+    const updated = normalizeEvent(
+      {
+        type: 'message.part.updated',
+        properties: {
+          part: {
+            id: 'tool_1',
+            type: 'tool',
+            messageID: 'msg_assistant',
+            sessionID: 'ses_root',
+            callID: 'call_1',
+            tool: 'read',
+            state: {
+              status: 'completed',
+              time: { start: Date.UTC(2026, 0, 2, 9), end: Date.UTC(2026, 0, 2, 9, 1) },
+            },
+          },
+        },
+      },
+      state,
+    )
+
+    expect(updated.touched.toolKeys).toEqual([
+      ['2026-01-02', 'read'],
+      ['2026-01-01', 'read'],
+    ])
+    expect(updated.touched.projectDayKeys).toEqual([
+      ['2026-01-02', 'proj_1'],
+      ['2026-01-01', 'proj_1'],
+    ])
   })
 
   it('captures compaction turns separately from user turns', () => {

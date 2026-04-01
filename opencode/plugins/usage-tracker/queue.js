@@ -5,7 +5,7 @@ import { createTurso } from "./turso.js"
 import { buildProject, mergeTurnRows, normalizeEvent, rememberSessionProject } from "./normalize.js"
 import { primaryKeyValue } from "./schema.js"
 import { recomputeTouchedRollups } from "./rollups.js"
-import { sleep, toErrorMessage } from "./utils.js"
+import { sleep, stableStringify, toErrorMessage } from "./utils.js"
 
 /**
  * @typedef {import("./index").FactsPayload} FactsPayload
@@ -45,8 +45,11 @@ function mergeRows(target, source) {
  */
 function mergeTouched(target, source) {
   for (const key of Object.keys(target)) {
-    const merged = new Set([...(target[key] ?? []), ...(source[key] ?? [])])
-    target[key] = Array.from(merged)
+    const merged = new Map()
+    for (const item of [...(target[key] ?? []), ...(source[key] ?? [])]) {
+      merged.set(stableStringify(item), item)
+    }
+    target[key] = Array.from(merged.values())
   }
 }
 
@@ -79,6 +82,7 @@ function emptyTouched() {
     sessionIDs: [],
     rootSessionIDs: [],
     days: [],
+    projectDayKeys: [],
     modelKeys: [],
     toolKeys: [],
   }

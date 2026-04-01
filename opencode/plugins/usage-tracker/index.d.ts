@@ -27,6 +27,7 @@ export interface TouchedKeys {
   sessionIDs: string[]
   rootSessionIDs: string[]
   days: string[]
+   projectDayKeys: [string, string][]
   modelKeys: [string, string, string][]
   toolKeys: [string, string][]
 }
@@ -56,6 +57,7 @@ export interface TrackerState {
   responseMap: Map<string, Record<string, unknown>>
   turnRowMap: Map<string, Record<string, unknown>>
   turnCreatedMap: Map<string, number>
+   toolDayMap: Map<string, string>
 }
 
 export interface QueueBatch {

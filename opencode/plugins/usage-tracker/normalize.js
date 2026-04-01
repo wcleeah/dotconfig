@@ -95,6 +95,17 @@ function collectAffectedSessionIDs(state, sessionID) {
 }
 
 /**
+ * Formats a timestamp as a UTC analytics day key.
+ *
+ * @param {number | null | undefined} timestamp
+ * @returns {string | null}
+ */
+function dayKey(timestamp) {
+  if (timestamp === null || timestamp === undefined) return null
+  return new Date(timestamp).toISOString().slice(0, 10)
+}
+
+/**
  * Builds a session fact row.
  *
  * @param {Record<string, any>} info
@@ -159,7 +170,7 @@ function buildTurn(info, rootSessionID, projectID, contentOverride = undefined, 
  * @param {string} projectID
  * @returns {Record<string, unknown>}
  */
-function buildResponse(info, rootSessionID, projectID) {
+export function buildResponse(info, rootSessionID, projectID) {
   const tokens = messageTokens(info)
   const created = info.time?.created ?? Date.now()
   const completed = info.time?.completed ?? null
@@ -253,7 +264,7 @@ function buildStep(part, responseID, sessionID, rootSessionID, projectID, respon
  * @param {string | null} stepID
  * @returns {{ call: Record<string, unknown>, payloads: Record<string, unknown>[] }}
  */
-function buildToolCall(part, responseID, sessionID, rootSessionID, projectID, stepID) {
+export function buildToolCall(part, responseID, sessionID, rootSessionID, projectID, stepID) {
   const state = part.state
   const inputContent = textValue(state?.input)
   const outputContent = textValue(state?.output)
@@ -325,11 +336,13 @@ export function normalizeEvent(event, state) {
     sessionIDs: new Set(),
     rootSessionIDs: new Set(),
     days: new Set(),
+    projectDayKeys: new Set(),
     modelKeys: new Set(),
     toolKeys: new Set(),
   }
 
-  const remember = ({ projectID, sessionID, rootSessionID, timestamp, modelID, providerID, tool }) => {
+  const remember = ({ projectID, sessionID, rootSessionID, timestamp, modelID, providerID, tool, extraTimestamps = [] }) => {
+    const timestamps = [timestamp, ...extraTimestamps].filter((value) => value !== null && value !== undefined)
     if (projectID) touched.projectIDs.add(projectID)
     if (sessionID) {
       for (const id of collectAffectedSessionIDs(state, sessionID)) {
@@ -337,9 +350,20 @@ export function normalizeEvent(event, state) {
       }
     }
     if (rootSessionID) touched.rootSessionIDs.add(rootSessionID)
-    if (timestamp) touched.days.add(new Date(timestamp).toISOString().slice(0, 10))
-    if (modelID || providerID) touched.modelKeys.add(JSON.stringify([new Date(timestamp ?? Date.now()).toISOString().slice(0, 10), modelID ?? "_unknown", providerID ?? "_unknown"]))
-    if (tool) touched.toolKeys.add(JSON.stringify([new Date(timestamp ?? Date.now()).toISOString().slice(0, 10), tool]))
+    for (const value of timestamps) {
+      const day = dayKey(value)
+      if (!day) continue
+      touched.days.add(day)
+      if (projectID) touched.projectDayKeys.add(JSON.stringify([day, projectID]))
+    }
+    const modelDay = dayKey(timestamp ?? Date.now())
+    if (modelDay && (modelID || providerID)) touched.modelKeys.add(JSON.stringify([modelDay, modelID ?? "_unknown", providerID ?? "_unknown"]))
+    if (tool) {
+      for (const value of timestamps.length > 0 ? timestamps : [Date.now()]) {
+        const toolDay = dayKey(value)
+        if (toolDay) touched.toolKeys.add(JSON.stringify([toolDay, tool]))
+      }
+    }
   }
 
   const emitTurn = (row) => {
@@ -444,8 +468,13 @@ export function normalizeEvent(event, state) {
         time_updated: removedAt,
         turn_duration_ms: null,
       })
-      remember({ projectID, sessionID, rootSessionID, timestamp: removedAt })
-      if (previousTurn?.time_created) touched.days.add(new Date(previousTurn.time_created).toISOString().slice(0, 10))
+      remember({
+        projectID,
+        sessionID,
+        rootSessionID,
+        timestamp: removedAt,
+        extraTimestamps: [previousTurn?.time_created ?? null],
+      })
       break
     }
     case "message.part.updated": {
@@ -515,6 +544,7 @@ export function normalizeEvent(event, state) {
         })
       }
       if (part.type === "tool" && response) {
+        const previousToolDay = state.toolDayMap.get(part.id) ?? null
         const toolCall = buildToolCall(
           part,
           part.messageID,
@@ -525,12 +555,15 @@ export function normalizeEvent(event, state) {
         )
         facts.tool_calls.push(toolCall.call)
         facts.tool_payloads.push(...toolCall.payloads)
+        const currentToolDay = dayKey(toolCall.call.started_at ?? toolCall.call.time_updated)
+        if (currentToolDay) state.toolDayMap.set(part.id, currentToolDay)
         remember({
           projectID,
           sessionID: part.sessionID,
           rootSessionID,
           timestamp: toolCall.call.started_at ?? toolCall.call.time_updated,
           tool: toolCall.call.tool,
+          extraTimestamps: previousToolDay ? [Date.parse(`${previousToolDay}T00:00:00.000Z`)] : [],
         })
       }
       break
@@ -546,6 +579,7 @@ export function normalizeEvent(event, state) {
       sessionIDs: Array.from(touched.sessionIDs),
       rootSessionIDs: Array.from(touched.rootSessionIDs),
       days: Array.from(touched.days),
+      projectDayKeys: Array.from(touched.projectDayKeys).map((value) => JSON.parse(value)),
       modelKeys: Array.from(touched.modelKeys).map((value) => JSON.parse(value)),
       toolKeys: Array.from(touched.toolKeys).map((value) => JSON.parse(value)),
     },
@@ -568,6 +602,7 @@ export function createTrackerState(project) {
     responseMap: new Map(),
     turnRowMap: new Map(),
     turnCreatedMap: new Map(),
+    toolDayMap: new Map(),
   }
   if (project?.id) {
     state.projectID = project.id

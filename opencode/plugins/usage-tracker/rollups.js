@@ -149,7 +149,12 @@ async function recomputeSessionRollups(turso, sessionIDs) {
           COALESCE(tool_stats.total_tool_time_ms, 0) AS total_tool_time_ms,
           COALESCE(tool_stats.total_tool_calls, 0) AS total_tool_calls,
           COALESCE(response_stats.models_used, 0) AS models_used,
-          NULLIF(MAX(COALESCE(turn_stats.turn_last_activity, 0), COALESCE(response_stats.response_last_activity, 0), COALESCE(tool_stats.tool_last_activity, 0)), 0) AS last_activity,
+          NULLIF(MAX(
+            COALESCE((SELECT MAX(s2.time_updated) FROM sessions s2 WHERE s2.id IN (SELECT id FROM subtree)), 0),
+            COALESCE(turn_stats.turn_last_activity, 0),
+            COALESCE(response_stats.response_last_activity, 0),
+            COALESCE(tool_stats.tool_last_activity, 0)
+          ), 0) AS last_activity,
           ? AS updated_at
         FROM turn_stats, response_stats, tool_stats
       `,
@@ -172,7 +177,16 @@ async function recomputeSessionModelRollups(turso, sessionIDs) {
   const rows = []
   const deleteKeys = []
   for (const sessionID of sessionIDs) {
-    deleteKeys.push([sessionID])
+    const existing = await queryRows(
+      turso,
+      `
+        SELECT session_id, model_id, provider_id
+        FROM session_model_rollups
+        WHERE session_id = ?
+      `,
+      [sessionID],
+    )
+    deleteKeys.push(...existing.map((row) => [row.session_id, row.model_id, row.provider_id]))
     const session = await queryOne(turso, `SELECT id FROM sessions WHERE id = ? AND deleted_at IS NULL`, [sessionID])
     if (!session) continue
     const result = await queryRows(
@@ -308,7 +322,16 @@ async function recomputeProjectModelRollups(turso, projectIDs) {
   const rows = []
   const deleteKeys = []
   for (const projectID of projectIDs) {
-    deleteKeys.push([projectID])
+    const existing = await queryRows(
+      turso,
+      `
+        SELECT project_id, model_id, provider_id
+        FROM project_model_rollups
+        WHERE project_id = ?
+      `,
+      [projectID],
+    )
+    deleteKeys.push(...existing.map((row) => [row.project_id, row.model_id, row.provider_id]))
     const result = await queryRows(
       turso,
       `
@@ -528,78 +551,100 @@ async function recomputeDailyToolRollups(turso, toolKeys) {
  * Recomputes daily per-project rollups.
  *
  * @param {any} turso
- * @param {string[]} projectIDs
- * @param {string[]} days
+ * @param {Array<[string, string]>} projectDayKeys
  * @returns {Promise<{ rows: Record<string, unknown>[], deleteKeys: unknown[][] }>}
  */
-async function recomputeDailyProjectRollups(turso, projectIDs, days) {
+async function recomputeDailyProjectRollups(turso, projectDayKeys) {
   const rows = []
   const deleteKeys = []
-  for (const projectID of projectIDs) {
-    for (const day of days) {
-      deleteKeys.push([day, projectID])
-      const row = await queryOne(
-        turso,
-        `
-          WITH turn_stats AS (
-            SELECT
-              COUNT(*) FILTER (WHERE ${turnWallTimeFilter()}) AS turn_count,
-              COALESCE(SUM(CASE WHEN ${turnWallTimeFilter()} THEN turn_duration_ms ELSE 0 END), 0) AS total_turn_wall_time_ms,
-              COALESCE(MAX(CASE WHEN ${turnWallTimeFilter()} THEN turn_duration_ms ELSE 0 END), 0) AS max_turn_wall_time_ms
-            FROM turns
-            WHERE project_id = ?
-              AND date(time_created / 1000, 'unixepoch') = ?
-          ),
-          response_stats AS (
-            SELECT
-              COUNT(*) AS response_count,
-              SUM(CASE WHEN error_type IS NOT NULL THEN 1 ELSE 0 END) AS error_count,
-              COALESCE(SUM(tokens_in), 0) AS total_tokens_in,
-              COALESCE(SUM(tokens_out), 0) AS total_tokens_out,
-              COALESCE(SUM(tokens_reasoning), 0) AS total_tokens_reasoning,
-              COALESCE(SUM(tokens_cache_read), 0) AS total_tokens_cache_read,
-              COALESCE(SUM(tokens_cache_write), 0) AS total_tokens_cache_write,
-              COALESCE(SUM(cost), 0) AS reported_cost,
-              COALESCE(SUM(response_time_ms), 0) AS total_assistant_time_ms,
-              COALESCE(MAX(response_time_ms), 0) AS max_assistant_time_ms
-            FROM responses
-            WHERE project_id = ?
-              AND date(time_created / 1000, 'unixepoch') = ?
-          ),
-          tool_stats AS (
-            SELECT
-              ${toolDurationSql()} AS total_tool_time_ms,
-              COALESCE(MAX(duration_ms), 0) AS max_tool_duration_ms
-            FROM tool_calls
-            WHERE project_id = ?
-              AND date(COALESCE(started_at, time_updated) / 1000, 'unixepoch') = ?
-          )
+  for (const [day, projectID] of projectDayKeys) {
+    deleteKeys.push([day, projectID])
+    const row = await queryOne(
+      turso,
+      `
+        WITH turn_stats AS (
           SELECT
-            ? AS day,
-            ? AS project_id,
-            COALESCE(turn_stats.turn_count, 0) AS turn_count,
-            COALESCE(response_stats.response_count, 0) AS response_count,
-            COALESCE(response_stats.error_count, 0) AS error_count,
-            COALESCE(response_stats.total_tokens_in, 0) AS total_tokens_in,
-            COALESCE(response_stats.total_tokens_out, 0) AS total_tokens_out,
-            COALESCE(response_stats.total_tokens_reasoning, 0) AS total_tokens_reasoning,
-            COALESCE(response_stats.total_tokens_cache_read, 0) AS total_tokens_cache_read,
-            COALESCE(response_stats.total_tokens_cache_write, 0) AS total_tokens_cache_write,
-            COALESCE(response_stats.reported_cost, 0) AS reported_cost,
-            COALESCE(turn_stats.total_turn_wall_time_ms, 0) AS total_turn_wall_time_ms,
-            COALESCE(response_stats.total_assistant_time_ms, 0) AS total_assistant_time_ms,
-            COALESCE(tool_stats.total_tool_time_ms, 0) AS total_tool_time_ms,
-            COALESCE(turn_stats.max_turn_wall_time_ms, 0) AS max_turn_wall_time_ms,
-            COALESCE(response_stats.max_assistant_time_ms, 0) AS max_assistant_time_ms,
-            COALESCE(tool_stats.max_tool_duration_ms, 0) AS max_tool_duration_ms,
-            ? AS updated_at
-          FROM turn_stats, response_stats, tool_stats
-        `,
-        [projectID, day, projectID, day, projectID, day, day, projectID, nowValue()],
-      )
-      if ((row?.turn_count ?? 0) === 0 && (row?.response_count ?? 0) === 0) continue
-      rows.push(row)
-    }
+            COUNT(*) FILTER (WHERE ${turnWallTimeFilter()}) AS turn_count,
+            COALESCE(SUM(CASE WHEN ${turnWallTimeFilter()} THEN turn_duration_ms ELSE 0 END), 0) AS total_turn_wall_time_ms,
+            COALESCE(MAX(CASE WHEN ${turnWallTimeFilter()} THEN turn_duration_ms ELSE 0 END), 0) AS max_turn_wall_time_ms
+          FROM turns
+          WHERE project_id = ?
+            AND date(time_created / 1000, 'unixepoch') = ?
+        ),
+        response_stats AS (
+          SELECT
+            COUNT(*) AS response_count,
+            SUM(CASE WHEN error_type IS NOT NULL THEN 1 ELSE 0 END) AS error_count,
+            COALESCE(SUM(tokens_in), 0) AS total_tokens_in,
+            COALESCE(SUM(tokens_out), 0) AS total_tokens_out,
+            COALESCE(SUM(tokens_reasoning), 0) AS total_tokens_reasoning,
+            COALESCE(SUM(tokens_cache_read), 0) AS total_tokens_cache_read,
+            COALESCE(SUM(tokens_cache_write), 0) AS total_tokens_cache_write,
+            COALESCE(SUM(cost), 0) AS reported_cost,
+            COALESCE(SUM(response_time_ms), 0) AS total_assistant_time_ms,
+            COALESCE(MAX(response_time_ms), 0) AS max_assistant_time_ms
+          FROM responses
+          WHERE project_id = ?
+            AND date(time_created / 1000, 'unixepoch') = ?
+        ),
+        tool_stats AS (
+          SELECT
+            COUNT(*) AS tool_call_count,
+            ${toolDurationSql()} AS total_tool_time_ms,
+            COALESCE(MAX(duration_ms), 0) AS max_tool_duration_ms
+          FROM tool_calls
+          WHERE project_id = ?
+            AND date(COALESCE(started_at, time_updated) / 1000, 'unixepoch') = ?
+        )
+        SELECT
+          ? AS day,
+          ? AS project_id,
+          COALESCE(turn_stats.turn_count, 0) AS turn_count,
+          COALESCE(response_stats.response_count, 0) AS response_count,
+          COALESCE(response_stats.error_count, 0) AS error_count,
+          COALESCE(response_stats.total_tokens_in, 0) AS total_tokens_in,
+          COALESCE(response_stats.total_tokens_out, 0) AS total_tokens_out,
+          COALESCE(response_stats.total_tokens_reasoning, 0) AS total_tokens_reasoning,
+          COALESCE(response_stats.total_tokens_cache_read, 0) AS total_tokens_cache_read,
+          COALESCE(response_stats.total_tokens_cache_write, 0) AS total_tokens_cache_write,
+          COALESCE(response_stats.reported_cost, 0) AS reported_cost,
+          COALESCE(turn_stats.total_turn_wall_time_ms, 0) AS total_turn_wall_time_ms,
+          COALESCE(response_stats.total_assistant_time_ms, 0) AS total_assistant_time_ms,
+          COALESCE(tool_stats.total_tool_time_ms, 0) AS total_tool_time_ms,
+          COALESCE(turn_stats.max_turn_wall_time_ms, 0) AS max_turn_wall_time_ms,
+          COALESCE(response_stats.max_assistant_time_ms, 0) AS max_assistant_time_ms,
+          COALESCE(tool_stats.max_tool_duration_ms, 0) AS max_tool_duration_ms,
+          ? AS updated_at
+        FROM turn_stats, response_stats, tool_stats
+      `,
+      [projectID, day, projectID, day, projectID, day, day, projectID, nowValue()],
+    )
+    const toolCount = await queryOne(
+      turso,
+      `
+        SELECT COUNT(*) AS tool_call_count
+        FROM tool_calls
+        WHERE project_id = ?
+          AND date(COALESCE(started_at, time_updated) / 1000, 'unixepoch') = ?
+      `,
+      [projectID, day],
+    )
+    const turnCount = await queryOne(
+      turso,
+      `
+        SELECT COUNT(*) AS turn_row_count
+        FROM turns
+        WHERE project_id = ?
+          AND date(time_created / 1000, 'unixepoch') = ?
+      `,
+      [projectID, day],
+    )
+    if (
+      (turnCount?.turn_row_count ?? 0) === 0 &&
+      (row?.response_count ?? 0) === 0 &&
+      (toolCount?.tool_call_count ?? 0) === 0
+    ) continue
+    rows.push(row)
   }
   return { rows, deleteKeys }
 }
@@ -622,6 +667,6 @@ export async function recomputeTouchedRollups(turso, touched) {
     daily_global_rollups: await recomputeDailyGlobalRollups(turso, touched.days),
     daily_model_rollups: await recomputeDailyModelRollups(turso, touched.modelKeys),
     daily_tool_rollups: await recomputeDailyToolRollups(turso, touched.toolKeys),
-    daily_project_rollups: await recomputeDailyProjectRollups(turso, touched.projectIDs, touched.days),
+    daily_project_rollups: await recomputeDailyProjectRollups(turso, touched.projectDayKeys),
   }
 }
