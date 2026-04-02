@@ -448,7 +448,7 @@ export function normalizeEvent(event, state) {
         facts.responses.push(response)
         state.responseMap.set(info.id, response)
         const completedAt = info.time?.completed
-        if (info.parentID && completedAt && info.finish && info.finish !== "tool-calls") {
+        if (info.parentID && completedAt && info.finish && !["tool-calls", "unknown"].includes(info.finish)) {
           const turnCreatedAt = state.turnCreatedMap.get(info.parentID)
           if (turnCreatedAt && completedAt >= turnCreatedAt) {
             emitTurn({

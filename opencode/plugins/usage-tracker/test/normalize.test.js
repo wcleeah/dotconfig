@@ -131,6 +131,73 @@ describe('normalizeEvent', () => {
     expect(toolUpdate.touched.toolKeys).toEqual([[new Date(2600).toISOString().slice(0, 10), 'read']])
   })
 
+  it('does not finalize turn duration when assistant finish is unknown', () => {
+    const state = createTrackerState({ id: 'proj_1' })
+
+    normalizeEvent(
+      {
+        type: 'session.created',
+        properties: {
+          info: {
+            id: 'ses_root',
+            projectID: 'proj_1',
+            slug: 'root',
+            directory: '/tmp/project',
+            title: 'Root session',
+            version: '1.0.0',
+            time: { created: 1000, updated: 1000 },
+          },
+        },
+      },
+      state,
+    )
+
+    normalizeEvent(
+      {
+        type: 'message.updated',
+        properties: {
+          info: {
+            id: 'msg_user',
+            role: 'user',
+            sessionID: 'ses_root',
+            time: { created: 2000 },
+          },
+        },
+      },
+      state,
+    )
+
+    const assistantUpdate = normalizeEvent(
+      {
+        type: 'message.updated',
+        properties: {
+          info: {
+            id: 'msg_assistant',
+            role: 'assistant',
+            parentID: 'msg_user',
+            sessionID: 'ses_root',
+            providerID: 'github-copilot',
+            modelID: 'gpt-5.4',
+            agent: 'plan',
+            finish: 'unknown',
+            cost: 0,
+            tokens: {
+              input: 50,
+              output: 0,
+              reasoning: 0,
+              cache: { read: 0, write: 0 },
+            },
+            time: { created: 2500, completed: 3000 },
+          },
+        },
+      },
+      state,
+    )
+
+    expect(assistantUpdate.facts.responses).toHaveLength(1)
+    expect(assistantUpdate.facts.turns).toHaveLength(0)
+  })
+
   it('keeps turn content when duration is added later', () => {
     const merged = mergeTurnRows(
       {

@@ -99,7 +99,14 @@ async function hydrateStateFromOpenCodeDb(state) {
         const completedAt = info.time?.completed
         const turnID = info.parentID
         const turnCreatedAt = turnID ? state.turnCreatedMap.get(turnID) : null
-        if (turnID && turnCreatedAt !== null && turnCreatedAt !== undefined && completedAt && info.finish && info.finish !== "tool-calls") {
+        if (
+          turnID &&
+          turnCreatedAt !== null &&
+          turnCreatedAt !== undefined &&
+          completedAt &&
+          info.finish &&
+          !["tool-calls", "unknown"].includes(info.finish)
+        ) {
           state.turnRowMap.set(
             turnID,
             mergeTurnRows(state.turnRowMap.get(turnID), {
