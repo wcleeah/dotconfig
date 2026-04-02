@@ -1,4 +1,4 @@
-import { byteLength, coalesce, textValue } from "./utils.js"
+import { byteLength, textValue } from "./utils.js"
 
 /**
  * @typedef {import("./index").NormalizedEventPayload} NormalizedEventPayload
@@ -135,6 +135,36 @@ function dayKey(timestamp) {
 }
 
 /**
+ * Updates a user turn row with the latest known assistant completion under the
+ * same parent turn. Turn duration is monotonic history, so any completed
+ * assistant sibling can extend the turn regardless of finish reason.
+ *
+ * @param {TrackerState} state
+ * @param {{ turnID: string | null | undefined, sessionID: string, rootSessionID: string, projectID: string, completedAt: number | null | undefined }} input
+ * @returns {Record<string, unknown> | null}
+ */
+function updateTurnDuration(state, input) {
+  if (!input.turnID || input.completedAt === null || input.completedAt === undefined) return null
+  const turnCreatedAt = state.turnCreatedMap.get(input.turnID)
+  if (turnCreatedAt === null || turnCreatedAt === undefined || input.completedAt < turnCreatedAt) return null
+  const next = mergeTurnRows(state.turnRowMap.get(input.turnID), {
+    id: input.turnID,
+    session_id: input.sessionID,
+    root_session_id: input.rootSessionID,
+    project_id: input.projectID,
+    content: null,
+    synthetic: 0,
+    compaction: 0,
+    undone_at: null,
+    time_created: turnCreatedAt,
+    time_updated: input.completedAt,
+    turn_duration_ms: input.completedAt - turnCreatedAt,
+  })
+  state.turnRowMap.set(input.turnID, next)
+  return next
+}
+
+/**
  * Builds a session fact row.
  *
  * @param {Record<string, any>} info
@@ -260,8 +290,8 @@ function buildResponsePart(part) {
  * @returns {Record<string, unknown>}
  */
 function buildStep(part, responseID, sessionID, rootSessionID, projectID, response, stepID) {
-  const startedAt = part.time?.start ?? response.time_created ?? Date.now()
-  const updatedAt = part.time?.end ?? part.time?.updated ?? startedAt
+  const startedAt = part.startedAt ?? response.time_created ?? Date.now()
+  const updatedAt = part.updatedAt ?? startedAt
   return {
     id: stepID,
     response_id: responseID,
@@ -439,32 +469,33 @@ export function normalizeEvent(event, state) {
       const projectID = state.sessionProjectMap.get(info.sessionID) ?? state.projectID ?? "_unknown"
       const rootSessionID = state.rootSessionMap.get(info.sessionID) ?? info.sessionID
       if (info.role === "user") {
+        state.messageRoleMap.set(info.id, "user")
         state.turnCreatedMap.set(info.id, info.time?.created ?? Date.now())
         emitTurn(buildTurn(info, rootSessionID, projectID))
         remember({ projectID, sessionID: info.sessionID, rootSessionID, timestamp: info.time?.created })
       }
       if (info.role === "assistant") {
+        state.messageRoleMap.set(info.id, "assistant")
         const response = buildResponse(info, rootSessionID, projectID)
         facts.responses.push(response)
         state.responseMap.set(info.id, response)
         const completedAt = info.time?.completed
-        if (info.parentID && completedAt && info.finish && !["tool-calls", "unknown"].includes(info.finish)) {
-          const turnCreatedAt = state.turnCreatedMap.get(info.parentID)
-          if (turnCreatedAt && completedAt >= turnCreatedAt) {
-            emitTurn({
-              id: info.parentID,
-              session_id: info.sessionID,
-              root_session_id: rootSessionID,
-              project_id: projectID,
-              content: null,
-              synthetic: 0,
-              compaction: 0,
-              undone_at: null,
-              time_created: turnCreatedAt,
-              time_updated: completedAt,
-              turn_duration_ms: completedAt - turnCreatedAt,
-            })
-          }
+        const turn = updateTurnDuration(state, {
+          turnID: info.parentID,
+          sessionID: info.sessionID,
+          rootSessionID,
+          projectID,
+          completedAt,
+        })
+        if (turn) {
+          facts.turns.push(turn)
+          remember({
+            projectID,
+            sessionID: info.sessionID,
+            rootSessionID,
+            timestamp: completedAt,
+            extraTimestamps: [turn.time_created ?? null],
+          })
         }
         remember({
           projectID,
@@ -483,20 +514,23 @@ export function normalizeEvent(event, state) {
       const projectID = state.sessionProjectMap.get(sessionID) ?? state.projectID ?? "_unknown"
       const rootSessionID = state.rootSessionMap.get(sessionID) ?? sessionID
       const removedAt = event.properties.time?.removed ?? Date.now()
+      const role = state.messageRoleMap.get(messageID) ?? null
       const previousTurn = state.turnRowMap.get(messageID)
-      emitTurn({
-        id: messageID,
-        session_id: sessionID,
-        root_session_id: rootSessionID,
-        project_id: projectID,
-        content: null,
-        synthetic: 0,
-        compaction: 0,
-        undone_at: removedAt,
-        time_created: removedAt,
-        time_updated: removedAt,
-        turn_duration_ms: null,
-      })
+      if (role !== "assistant") {
+        emitTurn({
+          id: messageID,
+          session_id: sessionID,
+          root_session_id: rootSessionID,
+          project_id: projectID,
+          content: null,
+          synthetic: 0,
+          compaction: 0,
+          undone_at: removedAt,
+          time_created: previousTurn?.time_created ?? removedAt,
+          time_updated: removedAt,
+          turn_duration_ms: previousTurn?.turn_duration_ms ?? null,
+        })
+      }
       remember({
         projectID,
         sessionID,
@@ -506,12 +540,24 @@ export function normalizeEvent(event, state) {
       })
       break
     }
+    case "message.part.removed": {
+      const sessionID = event.properties.sessionID
+      const projectID = state.sessionProjectMap.get(sessionID) ?? state.projectID ?? "_unknown"
+      const rootSessionID = state.rootSessionMap.get(sessionID) ?? sessionID
+      remember({
+        projectID,
+        sessionID,
+        rootSessionID,
+        timestamp: event.properties.time?.removed ?? Date.now(),
+      })
+      break
+    }
     case "message.part.updated": {
       const part = event.properties.part
       const projectID = state.sessionProjectMap.get(part.sessionID) ?? state.projectID ?? "_unknown"
       const rootSessionID = state.rootSessionMap.get(part.sessionID) ?? part.sessionID
       const response = state.responseMap.get(part.messageID)
-      const partTimestamp = part.time?.end ?? part.time?.updated ?? part.time?.start ?? Date.now()
+      const partTimestamp = event.properties.time ?? part.time?.end ?? part.time?.updated ?? part.time?.start ?? Date.now()
       if (part.type === "text") {
         if (response) {
           const payload = buildResponsePart(part)
@@ -556,18 +602,27 @@ export function normalizeEvent(event, state) {
         remember({ projectID, sessionID: part.sessionID, rootSessionID, timestamp: partTimestamp })
       }
       if (part.type === "step-start") {
-        state.messageStepMap.set(part.messageID, part.id)
+        state.messageStepMap.set(part.messageID, { id: part.id, startedAt: partTimestamp })
       }
       if (part.type === "step-finish" && response) {
-        const stepID = state.messageStepMap.get(part.messageID) ?? part.id
-        const step = buildStep(part, part.messageID, part.sessionID, rootSessionID, projectID, response, stepID)
+        const stepState = state.messageStepMap.get(part.messageID) ?? { id: part.id, startedAt: null }
+        const step = buildStep(
+          { ...part, startedAt: stepState.startedAt, updatedAt: partTimestamp },
+          part.messageID,
+          part.sessionID,
+          rootSessionID,
+          projectID,
+          response,
+          stepState.id,
+        )
         facts.llm_steps.push(step)
-        state.messageStepMap.set(part.messageID, stepID)
+        state.messageStepMap.set(part.messageID, stepState)
         remember({
           projectID,
           sessionID: part.sessionID,
           rootSessionID,
-          timestamp: step.time_created,
+          timestamp: step.time_updated,
+          extraTimestamps: [step.time_created],
           modelID: step.model_id,
           providerID: step.provider_id,
         })
@@ -580,7 +635,7 @@ export function normalizeEvent(event, state) {
           part.sessionID,
           rootSessionID,
           projectID,
-          state.messageStepMap.get(part.messageID) ?? null,
+          state.messageStepMap.get(part.messageID)?.id ?? null,
         )
         facts.tool_calls.push(toolCall.call)
         facts.tool_payloads.push(...toolCall.payloads)
@@ -627,6 +682,7 @@ export function createTrackerState(project) {
     rootSessionMap: new Map(),
     parentSessionMap: new Map(),
     sessionProjectMap: new Map(),
+    messageRoleMap: new Map(),
     messageStepMap: new Map(),
     responseMap: new Map(),
     turnRowMap: new Map(),

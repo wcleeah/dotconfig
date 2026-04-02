@@ -55,7 +55,7 @@ async function queryOne(turso, sql, args) {
  * @returns {string}
  */
 function turnWallTimeFilter(prefix = "") {
-  return `${prefix}synthetic = 0 AND ${prefix}compaction = 0 AND ${prefix}undone_at IS NULL`
+  return `${prefix}synthetic = 0 AND ${prefix}compaction = 0`
 }
 
 /**

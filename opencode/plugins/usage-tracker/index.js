@@ -71,6 +71,7 @@ async function hydrateStateFromOpenCodeDb(state) {
       const projectID = state.sessionProjectMap.get(sessionID) ?? state.projectID ?? "_unknown"
       const rootSessionID = state.rootSessionMap.get(sessionID) ?? sessionID
       const role = String(info.role ?? "")
+      if (role) state.messageRoleMap.set(message.id, role)
 
       if (role === "user") {
         const createdAt = Number(info.time?.created ?? message.timeCreated)
@@ -99,14 +100,7 @@ async function hydrateStateFromOpenCodeDb(state) {
         const completedAt = info.time?.completed
         const turnID = info.parentID
         const turnCreatedAt = turnID ? state.turnCreatedMap.get(turnID) : null
-        if (
-          turnID &&
-          turnCreatedAt !== null &&
-          turnCreatedAt !== undefined &&
-          completedAt &&
-          info.finish &&
-          !["tool-calls", "unknown"].includes(info.finish)
-        ) {
+        if (turnID && turnCreatedAt !== null && turnCreatedAt !== undefined && completedAt && completedAt >= turnCreatedAt) {
           state.turnRowMap.set(
             turnID,
             mergeTurnRows(state.turnRowMap.get(turnID), {
@@ -170,12 +164,12 @@ async function hydrateStateFromOpenCodeDb(state) {
         }
 
         if (type === "step-start") {
-          state.messageStepMap.set(message.id, part.id)
+          state.messageStepMap.set(message.id, { id: part.id, startedAt: partTimestamp })
         }
 
         if (type === "step-finish") {
-          const stepID = state.messageStepMap.get(message.id) ?? part.id
-          state.messageStepMap.set(message.id, stepID)
+          const step = state.messageStepMap.get(message.id) ?? { id: part.id, startedAt: null }
+          state.messageStepMap.set(message.id, step)
         }
 
         if (type === "tool" && state.responseMap.get(message.id)) {
@@ -185,7 +179,7 @@ async function hydrateStateFromOpenCodeDb(state) {
             sessionID,
             rootSessionID,
             projectID,
-            state.messageStepMap.get(message.id) ?? null,
+            state.messageStepMap.get(message.id)?.id ?? null,
           )
           const toolDay = new Date(Number(toolCall.call.started_at ?? toolCall.call.time_updated)).toISOString().slice(0, 10)
           state.toolDayMap.set(part.id, toolDay)

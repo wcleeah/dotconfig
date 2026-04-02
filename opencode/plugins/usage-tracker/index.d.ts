@@ -53,11 +53,12 @@ export interface TrackerState {
   rootSessionMap: Map<string, string>
   parentSessionMap: Map<string, string | null>
   sessionProjectMap: Map<string, string>
-  messageStepMap: Map<string, string>
+  messageStepMap: Map<string, { id: string, startedAt: number | null }>
+  messageRoleMap: Map<string, string>
   responseMap: Map<string, Record<string, unknown>>
   turnRowMap: Map<string, Record<string, unknown>>
   turnCreatedMap: Map<string, number>
-   toolDayMap: Map<string, string>
+  toolDayMap: Map<string, string>
 }
 
 export interface QueueBatch {

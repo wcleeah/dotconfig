@@ -131,7 +131,7 @@ describe('normalizeEvent', () => {
     expect(toolUpdate.touched.toolKeys).toEqual([[new Date(2600).toISOString().slice(0, 10), 'read']])
   })
 
-  it('does not finalize turn duration when assistant finish is unknown', () => {
+  it('finalizes turn duration from any completed assistant sibling', () => {
     const state = createTrackerState({ id: 'proj_1' })
 
     normalizeEvent(
@@ -195,7 +195,11 @@ describe('normalizeEvent', () => {
     )
 
     expect(assistantUpdate.facts.responses).toHaveLength(1)
-    expect(assistantUpdate.facts.turns).toHaveLength(0)
+    expect(assistantUpdate.facts.turns).toHaveLength(1)
+    expect(assistantUpdate.facts.turns[0]).toMatchObject({
+      id: 'msg_user',
+      turn_duration_ms: 1000,
+    })
   })
 
   it('keeps turn content when duration is added later', () => {
@@ -448,6 +452,7 @@ describe('normalizeEvent', () => {
       {
         type: 'message.part.updated',
         properties: {
+          time: 2550,
           part: {
             id: 'step_start',
             type: 'step-start',
@@ -463,6 +468,7 @@ describe('normalizeEvent', () => {
       {
         type: 'message.part.updated',
         properties: {
+          time: 2900,
           part: {
             id: 'step_finish',
             type: 'step-finish',
@@ -506,7 +512,119 @@ describe('normalizeEvent', () => {
     )
 
     expect(stepFinish.facts.llm_steps[0]?.id).toBe('step_start')
+    expect(stepFinish.facts.llm_steps[0]?.time_created).toBe(2550)
+    expect(stepFinish.facts.llm_steps[0]?.time_updated).toBe(2900)
     expect(toolUpdate.facts.tool_calls[0]?.step_id).toBe('step_start')
+  })
+
+  it('does not create a fake turn when an assistant message is removed', () => {
+    const state = createTrackerState({ id: 'proj_1' })
+
+    normalizeEvent(
+      {
+        type: 'session.created',
+        properties: {
+          info: {
+            id: 'ses_root',
+            projectID: 'proj_1',
+            slug: 'root',
+            directory: '/tmp/project',
+            title: 'Root session',
+            version: '1.0.0',
+            time: { created: 1000, updated: 1000 },
+          },
+        },
+      },
+      state,
+    )
+
+    normalizeEvent(
+      {
+        type: 'message.updated',
+        properties: {
+          info: {
+            id: 'msg_user',
+            role: 'user',
+            sessionID: 'ses_root',
+            time: { created: 2000 },
+          },
+        },
+      },
+      state,
+    )
+
+    normalizeEvent(
+      {
+        type: 'message.updated',
+        properties: {
+          info: {
+            id: 'msg_assistant',
+            role: 'assistant',
+            parentID: 'msg_user',
+            sessionID: 'ses_root',
+            providerID: 'github-copilot',
+            modelID: 'gpt-5.4',
+            finish: 'end-turn',
+            time: { created: 2500, completed: 3000 },
+          },
+        },
+      },
+      state,
+    )
+
+    const removed = normalizeEvent(
+      {
+        type: 'message.removed',
+        properties: {
+          sessionID: 'ses_root',
+          messageID: 'msg_assistant',
+          time: { removed: 4000 },
+        },
+      },
+      state,
+    )
+
+    expect(removed.facts.turns).toHaveLength(0)
+    expect(removed.touched.days).toEqual(['1970-01-01'])
+  })
+
+  it('treats part removal as non-subtractive history', () => {
+    const state = createTrackerState({ id: 'proj_1' })
+
+    normalizeEvent(
+      {
+        type: 'session.created',
+        properties: {
+          info: {
+            id: 'ses_root',
+            projectID: 'proj_1',
+            slug: 'root',
+            directory: '/tmp/project',
+            title: 'Root session',
+            version: '1.0.0',
+            time: { created: 1000, updated: 1000 },
+          },
+        },
+      },
+      state,
+    )
+
+    const removed = normalizeEvent(
+      {
+        type: 'message.part.removed',
+        properties: {
+          sessionID: 'ses_root',
+          messageID: 'msg_user',
+          partID: 'part_1',
+          time: { removed: 5000 },
+        },
+      },
+      state,
+    )
+
+    expect(removed.facts.turns).toHaveLength(0)
+    expect(removed.facts.response_parts).toHaveLength(0)
+    expect(removed.touched.projectDayKeys).toEqual([['1970-01-01', 'proj_1']])
   })
 
   it('marks both old and removal days touched when a turn is removed later', () => {
