@@ -114,10 +114,17 @@ function serializeFacts(facts) {
  *   replayAllOutbox(): Promise<void>,
  * }}
  */
-export function createIngestionQueue({ project, state, logger = console }) {
+export function createIngestionQueue({
+  project,
+  state,
+  logger = console,
+  ensureEventContext = async () => {},
+  turso: providedTurso,
+  outbox: providedOutbox,
+}) {
   const processID = `pid-${process.pid}-${Date.now()}`
-  const turso = createTurso()
-  const outbox = createOutbox(processID)
+  const turso = providedTurso ?? createTurso()
+  const outbox = providedOutbox ?? createOutbox(processID)
   const queue = []
   let pendingFacts = emptyFacts()
   let pendingTouched = emptyTouched()
@@ -125,6 +132,10 @@ export function createIngestionQueue({ project, state, logger = console }) {
   let closed = false
   let initialized = false
   let flushTimer = null
+
+  if (project) {
+    mergeRows(pendingFacts, { projects: [buildProject(project)] })
+  }
 
   /** @returns {Promise<void>} */
   async function init() {
@@ -222,14 +233,8 @@ export function createIngestionQueue({ project, state, logger = console }) {
     processID,
     /** @returns {Promise<void>} */
     async start() {
-      await init()
-      if (project) {
-        const projectFacts = { projects: [buildProject(project)] }
-        const facts = emptyFacts()
-        mergeRows(facts, projectFacts)
-        await turso.writeFacts(serializeFacts(facts))
-      }
-      await replayOutbox(outbox.list())
+      // Startup stays local and synchronous. Schema creation and writes happen
+      // on the first real flush so plugin initialization does not wait on Turso.
     },
     /**
      * Normalizes and queues one OpenCode event.
@@ -242,6 +247,7 @@ export function createIngestionQueue({ project, state, logger = console }) {
       if (event.type === "session.created" || event.type === "session.updated" || event.type === "session.deleted") {
         rememberSessionProject(state, event.properties.info)
       }
+      await ensureEventContext(event)
       const normalized = normalizeEvent(event, state)
       mergeRows(pendingFacts, normalized.facts)
       mergeTouched(pendingTouched, normalized.touched)
