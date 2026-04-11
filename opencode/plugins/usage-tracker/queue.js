@@ -99,12 +99,33 @@ function serializeFacts(facts) {
 }
 
 /**
+ * Returns whether any pending fact rows exist.
+ *
+ * @param {Record<string, Map<string, Record<string, unknown>>>} facts
+ * @returns {boolean}
+ */
+function hasPendingFacts(facts) {
+  return Object.values(facts).some((map) => map.size > 0)
+}
+
+/**
  * Creates the live ingestion queue used by the tracker plugin.
  *
  * The queue batches normalized events in memory and flushes them asynchronously
  * so the event hook only pays the cost of normalization and queueing.
  *
- * @param {{ project?: Record<string, unknown>, state: TrackerState, logger?: Console }} options
+ * @param {{
+ *   project?: Record<string, unknown>,
+ *   state: TrackerState,
+ *   logger?: Console,
+ *   ensureEventContext?: (event: Record<string, unknown>) => Promise<void>,
+ *   turso?: ReturnType<typeof createTurso>,
+ *   outbox?: ReturnType<typeof createOutbox>,
+ *   setTimeoutFn?: (callback: () => void | Promise<void>, ms: number) => unknown,
+ *   clearTimeoutFn?: (handle: unknown) => void,
+ *   sleepFn?: (ms: number) => Promise<void>,
+ *   flushDelayMs?: number,
+ * }} options
  * @returns {{
  *   processID: string,
  *   start(): Promise<void>,
@@ -121,6 +142,10 @@ export function createIngestionQueue({
   ensureEventContext = async () => {},
   turso: providedTurso,
   outbox: providedOutbox,
+  setTimeoutFn = setTimeout,
+  clearTimeoutFn = clearTimeout,
+  sleepFn = sleep,
+  flushDelayMs = 150,
 }) {
   const processID = `pid-${process.pid}-${Date.now()}`
   const turso = providedTurso ?? createTurso()
@@ -182,7 +207,7 @@ export function createIngestionQueue({
           createdAt: batch.createdAt,
         })
       }
-      await sleep(10)
+      await sleepFn(10)
     }
     running = false
   }
@@ -194,9 +219,9 @@ export function createIngestionQueue({
    */
   function scheduleFlush() {
     if (flushTimer) return
-    flushTimer = setTimeout(() => {
+    flushTimer = setTimeoutFn(async () => {
       flushTimer = null
-      const hasPending = Object.values(pendingFacts).some((map) => map.size > 0)
+      const hasPending = hasPendingFacts(pendingFacts)
       if (!hasPending) return
       queue.push({
         batchID: randomUUID(),
@@ -206,8 +231,8 @@ export function createIngestionQueue({
       })
       pendingFacts = emptyFacts()
       pendingTouched = emptyTouched()
-      void processLoop()
-    }, 150)
+      await processLoop()
+    }, flushDelayMs)
   }
 
   /**
@@ -256,10 +281,10 @@ export function createIngestionQueue({
     /** @returns {Promise<void>} */
     async flush() {
       if (flushTimer) {
-        clearTimeout(flushTimer)
+        clearTimeoutFn(flushTimer)
         flushTimer = null
       }
-      const hasPending = Object.values(pendingFacts).some((map) => map.size > 0)
+      const hasPending = hasPendingFacts(pendingFacts)
       if (hasPending) {
         queue.push({
           batchID: randomUUID(),
