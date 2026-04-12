@@ -304,4 +304,16 @@ describe("ingestion queue", () => {
     expect(harness.turso.counters.queryCount).toBeGreaterThan(0)
     expect(harness.turso.counters.queries.some((entry) => entry.sql.includes("tool_calls"))).toBe(true)
   })
+
+  it.todo("persists a flushed batch before remote fact writes begin under the durable journal model")
+
+  it.todo("replays surviving durable batches in explicit deterministic order after restart")
+
+  it.todo("keeps hot-path rollup query count at zero until the rollup timer fires")
+
+  it.todo("keeps durable work pending when a background rollup pass fails")
+
+  it.todo("drains durable fact work and durable rollup work before flush returns")
+
+  it.todo("forces orphan replay to converge rollups before returning")
 })
