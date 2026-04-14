@@ -1,138 +1,108 @@
 # Phase 3: Forced Flush Convergence
 
-## Quick Check
+## Execution Snapshot
 
-1. Dependency status: Phase 2 must be complete.
-2. Can an agent start now: yes, if timer-driven rollups already work and hot-path reads are gone before the timer fires.
-3. Main outcome: `queue.flush()` becomes a deterministic convergence boundary for both facts and rollups.
+1. Phase number: 3
+2. Source plan: `plugins/usage-tracker/BACKGROUND-ROLLUP-PLAN.md`
+3. Readiness: `Blocked`
+4. Primary deliverable: deterministic startup recovery, `flush()`, and orphan replay convergence on top of durable timer-only scheduling
+5. Blocking dependencies: Phase 2 scheduling work is not yet present
+6. Target measurements summary: `queue.flush()` drains journal-backed fact work and journal-backed rollup work before returning
+7. Next phase: `PHASE-4-FAILURE-AND-DURABILITY.md`
 
-## What This Phase Is About
+## Why This Phase Exists
 
-Phase 2 introduces eventual consistency. Phase 3 defines when the system must stop being eventual and become immediate.
+Normal runtime is allowed to be eventually consistent. Maintenance paths and restart recovery are not. This phase defines the exact convergence behavior for startup recovery, `queue.flush()`, and orphan replay once durable timer-only scheduling exists.
 
-The forcing boundary is `queue.flush()`.
+## Start Criteria
 
-After this phase, `queue.flush()` should mean:
+1. Phase 2 timer-only scheduling is implemented
+2. background rollup tests are passing
+3. durable journal entries exist as the source of truth for pending work
 
-1. all pending fact batches have been persisted or sent to outbox
-2. all currently dirty rollup invalidations have been recomputed
-3. replayed outbox batches have also contributed to rollup convergence
-4. no timer needs to fire later to finish already-requested work
+Current evidence:
 
-This is important for:
+1. none of those deliverables are visible in the repo yet
 
-1. maintenance tools
-2. process exit
-3. deterministic tests
+## Dependencies And How To Check Them
+
+1. Dependency: Phase 2 background scheduling and durable journal introduction
+Why it matters: there is nothing to force-converge until rollup work is actually deferred and journal-backed
+How to verify: inspect `plugins/usage-tracker/queue.js` for `rollupDelayMs`, timer-based `flushRollups()`, no inline rollup recomputation in `flushBatch()`, and durable journal writes before remote fact writes
+Status: `Not Done`
+
+## Target Measurements And Gates
+
+Entry gates:
+
+1. Measurement: durable timer-only scheduling exists
+Pass condition: deferred rollup scheduler and mainline durable journal are implemented and tested
+Measurement method: inspect code and run queue tests
+Current evidence: not implemented yet
+Status: `Not Met`
+
+Exit gates:
+
+1. Measurement: forced convergence
+Pass condition: `queue.flush()` returns only after journal-backed fact and rollup work are complete for already-known work
+Measurement method: queue tests
+Current evidence: not yet implemented
+Status: `Not Met`
+
+2. Measurement: startup recovery
+Pass condition: startup or initialization scans the durable journal and rebuilds the working state needed for later convergence
+Measurement method: queue tests and code inspection
+Current evidence: not yet implemented
+Status: `Not Met`
+
+3. Measurement: orphan replay convergence
+Pass condition: orphan replay returns only after facts and rollups are converged
+Measurement method: queue tests and replay-focused tests
+Current evidence: not yet implemented in the durable-journal model
+Status: `Not Met`
 
 ## Scope
 
-In scope:
+1. define startup recovery behavior from the durable journal
+2. define exact `flush()` order
+3. define exact orphan replay order and convergence rule
+4. clean up timer state and in-flight coordination
+5. ensure maintenance boundaries remain deterministic
 
-1. `plugins/usage-tracker/queue.js`
-2. `plugins/usage-tracker/test/queue.test.js`
-3. `plugins/usage-tracker/index.js` only if hooks need a small adjustment or comment
+## Out Of Scope
 
-Out of scope:
-
-1. crash durability across process restarts
-2. SQL optimization
-
-## Dependencies
-
-Required completed work:
-
-1. `PHASE-2-BACKGROUND-ROLLUP-SCHEDULING.md`
-
-Required state before starting:
-
-1. background rollup timer behavior exists
-2. hot-path `queryCount === 0` before timer is already passing in queue tests
-3. timer-driven recomputation is already passing in queue tests
-
-## Can Start When
-
-An agent can start this phase when all of these are true:
-
-1. the queue now has separate pending fact work and pending rollup work
-2. there is at least one test prepared to assert `flush()` semantics
-3. timer-driven recomputation does not depend on wall-clock timing
-
-## Stop And Investigate If
-
-1. `queue.flush()` returns while a rollup timer is still required to finish existing work
-2. outbox replay writes facts but leaves their rollups stale until a later timer run
-3. concurrent timer and flush paths can race and duplicate or lose dirty touched keys
-
-## Target Measurements
-
-Primary target:
-
-1. after `queue.flush()`, no currently pending rollup work remains unfinished
-
-Concrete test targets:
-
-1. `replaceRollupsCount > 0` after `queue.flush()` when dirty rollups exist but the timer has not fired
-2. no pending rollup timer remains after `queue.flush()` completes
-3. replayed outbox batches also end with recomputed rollups before `queue.flush()` returns
-
-## Files Likely To Change
-
-Primary file:
-
-1. `plugins/usage-tracker/queue.js`
-
-Supporting files:
-
-1. `plugins/usage-tracker/test/queue.test.js`
-2. `plugins/usage-tracker/index.js` only if necessary for a maintenance hook comment or small behavior cleanup
+1. changing SQL in `rollups.js`
+2. changing normalization semantics
+3. deeper failure hardening and replay-tooling updates beyond convergence semantics
+4. adding trigger heuristics or thresholds
 
 ## Implementation Details
 
-### 1. Define The Exact `flush()` Order
+1. Startup or initialization must scan the durable journal and rebuild any in-memory working state needed for fact and rollup processing.
+2. `flush()` must first materialize any pending in-memory fact batch into the durable journal.
+3. `flush()` must then process durable journal entries in deterministic order until facts are applied.
+4. `flush()` must cancel or join the rollup timer path and continue until the durable journal is empty for already-known work.
+5. `replayAllOutbox()` or its successor must preserve deterministic full-convergence semantics rather than stopping after facts are written.
+6. This phase should use the existing cleanup rule from Phase 2: durable journal entries are removed only after successful rollup completion for the covered work.
+7. Timer and `flush()` coordination should use one shared in-flight mechanism so they do not race each other and lose dirty keys.
 
-Recommended order:
+## Execution Checklist
 
-1. cancel the fact batching timer
-2. materialize any pending in-memory facts into the process queue
-3. drain fact batches with `processLoop()`
-4. cancel the rollup timer
-5. run `flushRollups()` synchronously
-6. replay process outbox batches
-7. run `flushRollups()` again in case replay introduced new dirty touched keys
+1. Define and document startup recovery ordering in code.
+2. Define and document exact `flush()` ordering in code.
+3. Ensure pending in-memory work is journaled before forced processing starts.
+4. Ensure durable journal facts are processed before forced rollup convergence begins.
+5. Ensure `flush()` joins or runs the rollup worker until journal-backed work is done.
+6. Ensure orphan replay forces full convergence before returning.
+7. Add deterministic queue tests for startup recovery, re-entrancy, and timer/flush overlap.
+8. Verify forced convergence paths respect the existing cleanup-on-rollup-success rule.
 
-This order is the simplest path to deterministic convergence.
+## Files And Systems Likely Affected
 
-### 2. Ensure Timer State Is Cleaned Up
-
-After `queue.flush()` returns, the queue should not still depend on an old timer handle from work that existed before the call.
-
-That means:
-
-1. clear the timer handle if present
-2. avoid double-running the same scheduled callback
-3. reschedule only for new work that arrives after the flush boundary
-
-### 3. Handle Re-Entrancy Carefully
-
-Possible edge cases:
-
-1. `flush()` called while a rollup run is already in progress
-2. new writes arrive while `flushRollups()` is executing
-3. outbox replay adds more dirty touched keys than the first forced rollup pass saw
-
-Recommended rule:
-
-1. `flush()` should not return until the queue reaches a stable no-pending-work state for the work visible at flush time
-
-### 4. Keep Hook Semantics Simple
-
-`index.js` already calls `queue.flush()` for:
-
-1. maintenance tools
-2. `exit`
-
-Prefer to keep those hooks unchanged and make `queue.flush()` itself authoritative.
+1. `plugins/usage-tracker/queue.js`
+2. `plugins/usage-tracker/index.js`
+3. `plugins/usage-tracker/test/queue.test.js`
+4. replay tooling only if startup or orphan recovery semantics already require a small interface adjustment
 
 ## Verification
 
@@ -140,34 +110,47 @@ Run:
 
 ```bash
 bun test plugins/usage-tracker/test/queue.test.js
-```
-
-Specifically confirm:
-
-1. a test where dirty rollups exist but the timer has not fired yet still converges on `queue.flush()`
-2. a test with outbox replay also converges before `queue.flush()` returns
-3. no pending timer remains after the flush boundary
-
-Optional full suite check:
-
-```bash
 bun test plugins/usage-tracker/test
 ```
 
-## Exit Criteria
+Then verify:
 
-This phase is complete when all of these are true:
+1. startup recovery rebuilds working state from the durable journal
+2. `queue.flush()` drains already-known durable fact and rollup work
+3. timer state is cleaned up correctly after forced convergence
+4. orphan replay converges before returning
+5. timer and `flush()` overlap does not lose work
 
-1. `queue.flush()` is a deterministic convergence boundary for both facts and rollups
-2. maintenance tool paths no longer rely on a later timer to finish existing work
-3. process exit semantics remain safe and predictable
-4. tests cover flush without depending on real time
+## Done Criteria
 
-## Handoff To Phase 4
+1. startup recovery has one explicit deterministic order
+2. `queue.flush()` has one explicit deterministic order
+3. queue tests prove forced convergence
+4. queue tests prove orphan replay convergence
+5. tracker tests pass
 
-Phase 4 starts from a queue that already has:
+## Handoff To Next Phase
 
-1. deferred timer-based rollups during normal operation
-2. forced deterministic convergence on explicit flush
+Next phase: `PHASE-4-FAILURE-AND-DURABILITY.md`
 
-The remaining question is failure handling and durability, especially the crash window between successful fact writes and a later rollup timer.
+This phase must deliver:
+
+1. deterministic startup recovery
+2. deterministic forced convergence
+3. deterministic orphan replay semantics
+4. confirmed convergence behavior that respects cleanup-on-rollup-success
+
+What becomes unblocked:
+
+1. Phase 4 can focus on failure semantics and replay-tooling alignment instead of still debating startup, flush, or basic cleanup behavior.
+
+## Open Questions Or Blockers
+
+1. Blocker: Phase 2 durable scheduler is not yet present in the repo
+
+## Sources
+
+1. `plugins/usage-tracker/BACKGROUND-ROLLUP-PLAN.md`, Step 6
+2. `plugins/usage-tracker/queue.js`
+3. `plugins/usage-tracker/index.js`
+4. `plugins/usage-tracker/test/queue.test.js`

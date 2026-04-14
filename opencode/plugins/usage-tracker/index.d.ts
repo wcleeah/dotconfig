@@ -64,6 +64,8 @@ export interface TrackerState {
 export interface QueueBatch {
   batchID: string
   createdAt: number
+  sequence?: number
+  factsAppliedAt?: number | null
   retryCount?: number
   facts: FactsPayload
   touched: TouchedKeys
@@ -77,8 +79,9 @@ export interface RollupReplacePayload {
 export interface OutboxHandle {
   root: string
   processDir: string
-  persist(batch: QueueBatch): string
+  persist(batch: QueueBatch): { file: string, sequence: number }
   remove(batchID: string): void
+  removeFile(file: string): void
   list(): string[]
   read(file: string): QueueBatch
   listAllOrphans(): string[]

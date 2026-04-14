@@ -1,171 +1,130 @@
 # Phase 2: Background Rollup Scheduling
 
-## Quick Check
+## Execution Snapshot
 
-1. Dependency status: Phase 0 must be complete. Phase 1 should be complete or developed in the same branch.
-2. Can an agent start now: yes, if the queue tests can already express the future contract.
-3. Main outcome: fact writes stay immediate, and rollup recomputation moves onto a slow background timer.
+1. Phase number: 2
+2. Source plan: `plugins/usage-tracker/BACKGROUND-ROLLUP-PLAN.md`
+3. Readiness: `Completed`
+4. Primary deliverable: mainline durable journal plus timer-only background rollup scheduling
+5. Blocking dependencies: none
+6. Target measurements summary: durable batches persist before remote writes; hot-path `queryCount === 0` before the rollup timer; no fast paths or thresholds introduced
+7. Next phase: `PHASE-3-FORCED-FLUSH-CONVERGENCE.md`
 
-## What This Phase Is About
+## Why This Phase Exists
 
-This is the core behavior change.
+This phase is the first runtime refactor phase. It replaces the failure-only outbox model with a mainline durable journal and then removes inline rollup recomputation from the hot write path while preserving the timer-only policy chosen in the source plan.
 
-Today, `flushBatch()` writes facts and immediately recomputes rollups. This phase breaks that coupling.
+It establishes the mainline durable queue and timer behavior, including the core cleanup rule that journal entries remain until the covered rollup work succeeds. Later phases harden restart, flush, and failure behavior around that rule.
 
-After this phase:
+## Start Criteria
 
-1. fact writes remain immediate
-2. touched rollup keys are accumulated in memory
-3. a background timer recomputes rollups later
-4. nearby batches are coalesced into one rollup pass
+1. Phase 1 end-state tests exist and pass
+2. the durable journal model is accepted as the source of truth
+3. no trigger-heuristic work is in flight
 
-This phase is where the primary read reduction should appear.
+Current evidence:
+
+1. durable journal design is documented in the plan
+2. Phase 1 end-state tests and fixture-driven integration coverage are now present in the repo
+
+## Dependencies And How To Check Them
+
+1. Dependency: Phase 1 end-state tests
+Why it matters: scheduling should be implemented against a fixed semantic contract
+How to verify: inspect `plugins/usage-tracker/test/queue.test.js` and any fixture-driven integration file for durable timer-only assertions
+Status: `Done`
+
+2. Dependency: timer-only policy decision
+Why it matters: this phase must not re-open fast-path or threshold design
+How to verify: inspect `plugins/usage-tracker/BACKGROUND-ROLLUP-PLAN.md`
+Status: `Done`
+
+3. Dependency: durable journal design decision
+Why it matters: this phase itself must introduce the journal; the design decision needs to be settled before coding starts
+How to verify: inspect `plugins/usage-tracker/BACKGROUND-ROLLUP-PLAN.md`
+Status: `Done`
+
+## Target Measurements And Gates
+
+Entry gates:
+
+1. Measurement: end-state scheduling tests exist
+Pass condition: tests for durable persistence, zero hot-path rollup reads, and later convergence exist
+Measurement method: inspect test files and run them
+Current evidence: `queue.test.js` now covers durable persistence, deterministic replay, zero hot-path rollup reads before the rollup timer, failure retention, flush draining, and orphan replay convergence; `queue-fixture.test.js` provides realistic fixture-driven coverage
+Status: `Met`
+
+Exit gates:
+
+1. Measurement: durable persistence before remote fact write
+Pass condition: queue tests prove a flushed batch is persisted before remote fact write begins
+Measurement method: queue tests
+Current evidence: implemented and covered by `queue.test.js`
+Status: `Met`
+
+2. Measurement: hot-path rollup reads before rollup timer
+Pass condition: `queryCount === 0` before rollup timer execution
+Measurement method: queue tests and fixture-driven integration tests
+Current evidence: implemented and covered by `queue.test.js`
+Status: `Met`
+
+3. Measurement: background rollup execution after timer
+Pass condition: later timer execution triggers `recomputeTouchedRollups()` and `replaceRollups()`
+Measurement method: queue tests
+Current evidence: implemented and covered by `queue.test.js`
+Status: `Met`
+
+Target measurements for this phase: none beyond the semantic scheduler contract above.
 
 ## Scope
 
-In scope:
+1. replace the failure-only outbox with a mainline durable journal
+2. add explicit replay-order metadata
+3. add `rollupDelayMs`
+4. remove inline rollup recomputation from the fact write path
+5. add timer-based rollup scheduling
+6. preserve timer-only policy with no fast paths
+7. remove durable journal entries only after confirmed rollup success for the covered work
 
-1. `plugins/usage-tracker/queue.js`
-2. `plugins/usage-tracker/test/queue.test.js`
-3. `plugins/usage-tracker/index.d.ts` if new queue options need types
+## Out Of Scope
 
-Out of scope:
-
-1. full durability across process crashes
-2. SQL rewrites in `rollups.js`
-3. redesigning outbox storage
-
-## Dependencies
-
-Required completed work:
-
-1. `PHASE-0-MEASUREMENT-HARNESS.md`
-
-Strongly recommended completed work:
-
-1. `PHASE-1-END-STATE-TESTS.md`
-
-Required preconditions:
-
-1. the baseline harness can show that the old path issues rollup reads inline
-2. fake timers can be advanced deterministically
-3. the queue tests cover the representative event sequence
-
-## Can Start When
-
-An agent can start this phase when all of these are true:
-
-1. the desired-state tests for pre-timer and post-timer behavior exist or are being authored in the same branch
-2. the queue accepts injected timeout functions
-3. the current hot path still shows `queryCount > 0` before any deferral logic is added
-
-## Stop And Investigate If
-
-1. hot-path `queryCount` is still non-zero after the refactor and before the timer fires
-2. the timer keeps getting postponed forever under bursty load
-3. fact write failures accidentally schedule successful rollup work for data that never committed
-
-## Target Measurements
-
-Primary target:
-
-1. `hot_path_query_count_before_timer === 0`
-
-Secondary targets:
-
-1. `replaceRollupsCountBeforeTimer === 0`
-2. `scheduledRollupTimers === 1` for a burst before the timer fires
-3. `replaceRollupsCountAfterOneTimer === 1` for a simple burst
-4. `eventual_query_count_after_timer > 0`
-
-Expected improvement:
-
-1. the visible read pressure moves off the synchronous fact write path
-2. multiple nearby batches are merged into fewer rollup passes
-
-## Files Likely To Change
-
-Primary file:
-
-1. `plugins/usage-tracker/queue.js`
-
-Supporting file:
-
-1. `plugins/usage-tracker/test/queue.test.js`
-
-Only touch these later files if the refactor truly requires it:
-
-1. `plugins/usage-tracker/index.d.ts`
-2. `plugins/usage-tracker/index.js`
-
-Do not rewrite `rollups.js` in this phase.
+1. final `flush()` convergence semantics
+2. final orphan replay semantics
+3. full failure hardening and replay-tooling alignment
+4. SQL optimization
+5. trigger heuristics or thresholds
 
 ## Implementation Details
 
-### 1. Split Fact Writes From Rollup Refresh
+1. `plugins/usage-tracker/outbox.js` or its successor should stop being a failure-only store and become the durable journal for all flushed `QueueBatch` records.
+2. Add explicit replay-order metadata such as a per-process monotonic sequence number. Do not treat `mtime` as the correctness mechanism.
+3. `plugins/usage-tracker/queue.js` should stop calling `recomputeTouchedRollups()` directly from `flushBatch()`.
+4. Introduce `rollupDelayMs` and rollup timer state.
+5. When the fact timer materializes a batch, persist it durably before remote fact write begins.
+6. After a durable journal entry's facts are successfully written, merge its `touched` keys into an in-memory rollup working set.
+7. Schedule `flushRollups()` later on the rollup timer.
+8. Delete durable journal entries only after confirmed rollup success for the covered work. Do not introduce any earlier cleanup point.
+9. Do not add event-specific or fact-count-based early rollup triggers.
 
-Refactor the queue so `flushBatch(batch)` is responsible for fact persistence only.
+## Execution Checklist
 
-Recommended post-write behavior:
+1. Convert the storage layer from failure-only outbox to mainline durable journal.
+2. Add explicit replay-order metadata to durable journal entries.
+3. Add `rollupDelayMs` to the queue interface.
+4. Remove inline `recomputeTouchedRollups()` from the fact write path.
+5. Add rollup timer state and scheduling helpers.
+6. Merge post-fact-write touched keys into an in-memory rollup working set.
+7. Remove durable journal entries only after `flushRollups()` completes successfully for the covered work.
+8. Trigger `flushRollups()` only from timer or explicit convergence paths.
+9. Preserve deterministic tests while changing the scheduler and storage model.
 
-1. call `await init()`
-2. call `await turso.writeFacts(batch.facts)`
-3. merge `batch.touched` into a new in-memory accumulator such as `pendingRollupTouched`
-4. schedule a rollup timer if one is not already scheduled
+## Files And Systems Likely Affected
 
-### 2. Introduce Separate Rollup Queue State
-
-Recommended new state variables:
-
-1. `pendingRollupTouched`
-2. `rollupTimer`
-3. `rollupRunning`
-4. `rollupDelayMs` option with a default of `15000`
-
-Recommended helper:
-
-1. `hasTouched(touched)` to avoid duplicated emptiness checks
-
-### 3. Add `scheduleRollupFlush()`
-
-This helper should:
-
-1. no-op if the queue is closed
-2. no-op if a rollup timer already exists
-3. schedule one timer for `rollupDelayMs`
-4. clear the timer handle before calling `flushRollups()`
-
-The timer should not be pushed forward indefinitely just because more writes arrive. The whole point is to coalesce bursts, not to starve rollups.
-
-### 4. Add `flushRollups()`
-
-Recommended flow:
-
-1. exit if the queue is closed
-2. exit if a rollup run is already in progress
-3. exit if there are no pending touched keys
-4. move the current dirty touched set into a local variable
-5. clear `pendingRollupTouched`
-6. call `recomputeTouchedRollups(turso, touched)`
-7. call `turso.replaceRollups(rollups)`
-8. if the run fails, merge the touched keys back into `pendingRollupTouched`
-9. if new keys arrived during the run, schedule one more pass afterward
-
-### 5. Preserve Existing Fact Failure Semantics
-
-The outbox still belongs to fact write failures.
-
-Do not mark rollup work as complete if `writeFacts()` failed and the batch was diverted to outbox.
-
-The safe rule is:
-
-1. only merge `batch.touched` into pending rollup invalidation state after `writeFacts()` succeeds
-
-### 6. Keep Phase Boundaries Clean
-
-This phase may make the minimum `flush()` adjustments needed to avoid stranding dirty rollup state, but Phase 3 owns the final explicit-flush semantics.
-
-Avoid turning Phase 2 into a broad shutdown and durability refactor.
+1. `plugins/usage-tracker/queue.js`
+2. `plugins/usage-tracker/outbox.js` or a renamed successor such as `journal.js`
+3. `plugins/usage-tracker/index.d.ts`
+4. `plugins/usage-tracker/test/queue.test.js`
+5. `plugins/usage-tracker/test/queue-fixture.test.js` if present
 
 ## Verification
 
@@ -173,37 +132,51 @@ Run:
 
 ```bash
 bun test plugins/usage-tracker/test/queue.test.js
-```
-
-Then confirm the core measurements from the test harness:
-
-1. `queryCount === 0` before the background timer fires
-2. `replaceRollupsCount === 0` before the background timer fires
-3. after one timer callback, rollups are recomputed
-4. one timer run can cover several batches queued before it fires
-
-Optional full suite check:
-
-```bash
 bun test plugins/usage-tracker/test
 ```
 
-## Exit Criteria
+Then verify:
 
-This phase is complete when all of these are true:
+1. a flushed batch is persisted durably before remote fact write begins
+2. inline rollup reads are gone from the hot path
+3. `queryCount === 0` before rollup timer execution
+4. background timer later triggers rollup reads and replacement
+5. no fast-path or threshold behavior was introduced
 
-1. fact writes no longer trigger immediate rollup recomputation
-2. hot-path rollup reads are zero before the timer fires
-3. a timer-driven pass still recomputes rollups later
-4. burst activity is coalesced into fewer rollup passes
-5. no existing queue or outbox semantics regress for fact write failures
+## Done Criteria
 
-## Handoff To Phase 3
+1. a mainline durable journal exists for flushed batches
+2. explicit replay-order metadata exists for durable journal entries
+3. inline rollup recomputation is removed from the fact write path
+4. rollups are scheduled by a second timer
+5. durable journal entries are removed only after successful rollup completion
+6. hot-path queue tests prove zero rollup reads before that timer fires
+7. tracker tests pass
 
-Phase 3 assumes there is now a separate pending rollup state in the queue.
+## Handoff To Next Phase
 
-The next phase will formalize deterministic convergence for:
+Next phase: `PHASE-3-FORCED-FLUSH-CONVERGENCE.md`
 
-1. explicit `queue.flush()`
-2. maintenance tool flows
-3. shutdown behavior
+This phase must deliver:
+
+1. mainline durable journal for flushed batches
+2. timer-only background scheduling
+3. cleanup tied to rollup success
+4. preserved fact-write behavior
+5. passing scheduler tests
+
+What becomes unblocked:
+
+1. Phase 3 can define startup recovery, exact `flush()` order, and orphan replay convergence semantics on top of the new durable scheduler.
+
+## Open Questions Or Blockers
+
+1. Remaining work moves to Phase 3: startup recovery, exact `flush()` order hardening, and orphan replay semantics beyond the current Phase 2 contract
+
+## Sources
+
+1. `plugins/usage-tracker/BACKGROUND-ROLLUP-PLAN.md`, Step 3 through Step 5
+2. `plugins/usage-tracker/queue.js`
+3. `plugins/usage-tracker/outbox.js`
+4. `plugins/usage-tracker/index.d.ts`
+5. `plugins/usage-tracker/test/queue.test.js`

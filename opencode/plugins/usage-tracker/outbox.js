@@ -1,4 +1,4 @@
-import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs"
+import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { homedir } from "node:os"
 
@@ -42,7 +42,7 @@ function safeReadJSON(filePath) {
 }
 
 /**
- * Creates a per-process durable outbox for failed Turso batches.
+ * Creates a per-process durable queue batch journal.
  *
  * Batches are first written to a temporary file and then renamed into place.
  * The rename is an atomic publish step within the same directory, which keeps
@@ -54,56 +54,106 @@ function safeReadJSON(filePath) {
 export function createOutbox(processID) {
   const root = ensureDir(join(dataHome(), "opencode", "usage-outbox"))
   const processDir = ensureDir(join(root, processID))
+  let nextSequence = 0
 
   /**
-   * Builds the final JSON file path for a batch.
+   * Builds the final JSON file path for a batch sequence.
    *
+   * @param {number} sequence
    * @param {string} batchID
    * @returns {string}
    */
-  function filePath(batchID) {
-    return join(processDir, `${batchID}.json`)
+  function filePath(sequence, batchID) {
+    return join(processDir, `${String(sequence).padStart(12, "0")}-${batchID}.json`)
   }
+
+  /**
+   * Parses the leading sequence from a journal file path.
+   *
+   * @param {string} file
+   * @returns {number}
+   */
+  function sequenceFromPath(file) {
+    const name = file.split("/").pop() ?? ""
+    return Number.parseInt(name.split("-")[0] ?? "0", 10)
+  }
+
+  /**
+   * Returns the current highest sequence number across all journal files.
+   *
+   * @returns {number}
+   */
+  function maxSequence() {
+    return listFiles(processDir).reduce((max, file) => Math.max(max, sequenceFromPath(file)), 0)
+  }
+
+  /**
+   * Lists journal files inside one directory in deterministic sequence order.
+   *
+   * @param {string} directory
+   * @returns {string[]}
+   */
+  function listFiles(directory) {
+    return readdirSync(directory)
+      .filter((name) => name.endsWith(".json"))
+      .map((name) => join(directory, name))
+      .sort((left, right) => sequenceFromPath(left) - sequenceFromPath(right) || left.localeCompare(right))
+  }
+
+  nextSequence = maxSequence() + 1
 
   return {
     root,
     processDir,
     /**
-     * Persists a batch atomically.
+     * Persists a batch atomically in deterministic sequence order.
      *
      * Writing to `*.tmp` first avoids exposing a partially written JSON file if
      * the process crashes mid-write. Replay code only looks for final `.json`
      * files, so temp files are never treated as valid batches.
      *
      * @param {QueueBatch} batch
-     * @returns {string}
-     */
-    persist(batch) {
-      const path = filePath(batch.batchID)
-      const tempPath = `${path}.tmp`
-      writeFileSync(tempPath, JSON.stringify(batch) + "\n")
-      renameSync(tempPath, path)
-      return path
-    },
+     * @returns {{ file: string, sequence: number }}
+      */
+      persist(batch) {
+       const sequence = batch.sequence ?? nextSequence++
+       const payload = {
+         ...batch,
+        sequence,
+        factsAppliedAt: batch.factsAppliedAt ?? null,
+      }
+       const path = filePath(sequence, batch.batchID)
+       const tempPath = `${path}.tmp`
+       writeFileSync(tempPath, JSON.stringify(payload) + "\n")
+       renameSync(tempPath, path)
+       return { file: path, sequence }
+     },
     /**
-     * Deletes a persisted batch file.
+     * Deletes a persisted batch file by batch id.
      *
      * @param {string} batchID
      * @returns {void}
      */
-    remove(batchID) {
-      rmSync(filePath(batchID), { force: true })
+     remove(batchID) {
+      const match = this.list().find((file) => this.read(file).batchID === batchID)
+      if (match) rmSync(match, { force: true })
+    },
+    /**
+     * Deletes a persisted batch file by path.
+     *
+     * @param {string} file
+     * @returns {void}
+     */
+    removeFile(file) {
+      rmSync(file, { force: true })
     },
     /**
      * Lists batches owned by the current process directory.
      *
      * @returns {string[]}
      */
-    list() {
-      return readdirSync(processDir)
-        .filter((name) => name.endsWith(".json"))
-        .map((name) => join(processDir, name))
-        .sort((left, right) => statSync(left).mtimeMs - statSync(right).mtimeMs)
+     list() {
+      return listFiles(processDir)
     },
     /**
      * Reads a persisted batch payload.
@@ -119,16 +169,14 @@ export function createOutbox(processID) {
      *
      * @returns {string[]}
      */
-    listAllOrphans() {
-      return readdirSync(root, { withFileTypes: true })
-        .filter((entry) => entry.isDirectory())
-        .flatMap((entry) => {
-          const dir = join(root, entry.name)
-          return readdirSync(dir)
-            .filter((name) => name.endsWith(".json"))
-            .map((name) => join(dir, name))
-        })
-        .sort((left, right) => statSync(left).mtimeMs - statSync(right).mtimeMs)
+     listAllOrphans() {
+        return readdirSync(root, { withFileTypes: true })
+          .filter((entry) => entry.isDirectory())
+          .flatMap((entry) => {
+            const dir = join(root, entry.name)
+            return listFiles(dir)
+          })
+          .sort((left, right) => sequenceFromPath(left) - sequenceFromPath(right) || left.localeCompare(right))
     },
   }
 }

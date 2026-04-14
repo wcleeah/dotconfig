@@ -109,6 +109,16 @@ function hasPendingFacts(facts) {
 }
 
 /**
+ * Returns whether any touched-key bucket is non-empty.
+ *
+ * @param {TouchedKeys} touched
+ * @returns {boolean}
+ */
+function hasTouched(touched) {
+  return Object.values(touched).some((items) => items.length > 0)
+}
+
+/**
  * Creates the live ingestion queue used by the tracker plugin.
  *
  * The queue batches normalized events in memory and flushes them asynchronously
@@ -125,6 +135,7 @@ function hasPendingFacts(facts) {
  *   clearTimeoutFn?: (handle: unknown) => void,
  *   sleepFn?: (ms: number) => Promise<void>,
  *   flushDelayMs?: number,
+ *   rollupDelayMs?: number,
  * }} options
  * @returns {{
  *   processID: string,
@@ -146,17 +157,30 @@ export function createIngestionQueue({
   clearTimeoutFn = clearTimeout,
   sleepFn = sleep,
   flushDelayMs = 150,
+  rollupDelayMs = 15000,
 }) {
   const processID = `pid-${process.pid}-${Date.now()}`
   const turso = providedTurso ?? createTurso()
   const outbox = providedOutbox ?? createOutbox(processID)
-  const queue = []
   let pendingFacts = emptyFacts()
   let pendingTouched = emptyTouched()
-  let running = false
+  let pendingRollupTouched = emptyTouched()
+  let pendingRollupFiles = new Map()
   let closed = false
   let initialized = false
   let flushTimer = null
+  let rollupTimer = null
+  let lastPersistedSequence = 0
+  let factsAppliedThrough = 0
+  let rollupsAppliedThrough = 0
+  let journalQueue = []
+  let journalDraining = false
+  let rollupRunning = false
+  let rollupKickRequested = false
+  let journalFailure = null
+  let rollupFailure = null
+  const factWaiters = new Map()
+  const rollupWaiters = new Map()
 
   if (project) {
     mergeRows(pendingFacts, { projects: [buildProject(project)] })
@@ -170,46 +194,307 @@ export function createIngestionQueue({
   }
 
   /**
-   * Writes one batch to Turso and recomputes touched rollups.
+   * Resolves progress waiters once progress reaches or passes their target.
    *
-   * @param {QueueBatch} batch
-   * @returns {Promise<void>}
+   * @param {Map<number, Array<{ resolve: () => void, reject: (error: Error) => void }>>} waiters
+   * @param {number} progress
+   * @returns {void}
    */
-  async function flushBatch(batch) {
-    await init()
-    await turso.writeFacts(batch.facts)
-    const rollups = await recomputeTouchedRollups(turso, batch.touched)
-    await turso.replaceRollups(rollups)
+  function resolveProgressWaiters(waiters, progress) {
+    for (const [target, resolvers] of Array.from(waiters.entries())) {
+      if (progress < target) continue
+      waiters.delete(target)
+      for (const entry of resolvers) entry.resolve()
+    }
   }
 
   /**
-   * Drains the in-memory queue sequentially.
+   * Rejects all pending waiters with the provided error.
    *
-   * Failed batches are moved into the durable outbox instead of retried in a
-   * tight loop during the same runtime turn.
+   * @param {Map<number, Array<{ resolve: () => void, reject: (error: Error) => void }>>} waiters
+   * @param {Error} error
+   * @returns {void}
+   */
+  function rejectProgressWaiters(waiters, error) {
+    for (const resolvers of waiters.values()) {
+      for (const entry of resolvers) entry.reject(error)
+    }
+    waiters.clear()
+  }
+
+  /**
+   * Waits until the provided progress marker reaches the target sequence.
+   *
+   * @param {Map<number, Array<{ resolve: () => void, reject: (error: Error) => void }>>} waiters
+   * @param {() => number} current
+   * @param {number} target
+   * @param {() => Error | null} currentFailure
+   * @returns {Promise<void>}
+   */
+  function waitForProgressAtLeast(waiters, current, target, currentFailure) {
+    if (target <= 0 || current() >= target) return Promise.resolve()
+    const failure = currentFailure()
+    if (failure) return Promise.reject(failure)
+
+    return new Promise((resolve, reject) => {
+      const bucket = waiters.get(target) ?? []
+      bucket.push({ resolve, reject })
+      waiters.set(target, bucket)
+    })
+  }
+
+  /**
+   * Waits until fact writes have been applied through the target sequence.
+   *
+   * @param {number} target
+   * @returns {Promise<void>}
+   */
+  function waitForFactsThrough(target) {
+    return waitForProgressAtLeast(factWaiters, () => factsAppliedThrough, target, () => journalFailure)
+  }
+
+  /**
+   * Waits until rollups have converged through the target sequence.
+   *
+   * @param {number} target
+   * @returns {Promise<void>}
+   */
+  function waitForRollupsThrough(target) {
+    return waitForProgressAtLeast(rollupWaiters, () => rollupsAppliedThrough, target, () => rollupFailure)
+  }
+
+  /**
+   * Queues one persisted journal entry for fact application.
+   *
+   * @param {{ file: string, sequence: number }} entry
+   * @returns {number}
+   */
+  function enqueueJournalEntry(entry) {
+    if (journalQueue.some((queued) => queued.file === entry.file)) return entry.sequence
+    journalQueue.push(entry)
+    journalQueue.sort((left, right) => left.sequence - right.sequence || left.file.localeCompare(right.file))
+    return entry.sequence
+  }
+
+  /**
+   * Persists one journal batch and returns its sequence.
+   *
+   * @param {QueueBatch} batch
+   * @returns {Promise<number>}
+   */
+  async function persistJournalBatch(batch) {
+    const entry = outbox.persist(batch)
+    lastPersistedSequence = entry.sequence
+    enqueueJournalEntry(entry)
+    return entry.sequence
+  }
+
+  /**
+   * Materializes the current in-memory fact accumulator into a durable journal entry.
+   *
+   * @returns {Promise<number | null>}
+   */
+  async function persistPendingBatch() {
+    if (!hasPendingFacts(pendingFacts)) return null
+
+    const facts = serializeFacts(pendingFacts)
+    const touched = pendingTouched
+
+    pendingFacts = emptyFacts()
+    pendingTouched = emptyTouched()
+
+    try {
+      return await persistJournalBatch({
+        batchID: randomUUID(),
+        createdAt: Date.now(),
+        facts,
+        touched,
+      })
+    } catch (error) {
+      // Persistence must be atomic from the queue's perspective. If durable
+      // publish fails, merge the snapshot back so a later flush can retry it.
+      mergeRows(pendingFacts, facts)
+      mergeTouched(pendingTouched, touched)
+      throw error
+    }
+  }
+
+  /**
+   * Schedules a delayed background rollup pass.
+   *
+   * @returns {void}
+   */
+  function scheduleRollupFlush() {
+    if (closed || rollupTimer || !hasTouched(pendingRollupTouched)) return
+
+    rollupTimer = setTimeoutFn(async () => {
+      rollupTimer = null
+      const target = Array.from(pendingRollupFiles.values()).reduce((max, sequence) => Math.max(max, sequence), rollupsAppliedThrough)
+      kickRollupPass()
+      try {
+        await waitForRollupsThrough(target)
+      } catch {}
+    }, rollupDelayMs)
+  }
+
+  /**
+   * Applies fact writes for one durable journal entry.
+   *
+   * @param {string} file
+   * @returns {Promise<void>}
+   */
+  async function applyJournalFile(file) {
+    const batch = outbox.read(file)
+
+    await init()
+    await turso.writeFacts(batch.facts)
+
+    if (!hasTouched(batch.touched)) {
+      outbox.removeFile(file)
+      factsAppliedThrough = Math.max(factsAppliedThrough, batch.sequence ?? 0)
+      resolveProgressWaiters(factWaiters, factsAppliedThrough)
+      rollupsAppliedThrough = Math.max(rollupsAppliedThrough, batch.sequence ?? 0)
+      resolveProgressWaiters(rollupWaiters, rollupsAppliedThrough)
+      return
+    }
+
+    factsAppliedThrough = Math.max(factsAppliedThrough, batch.sequence ?? 0)
+    resolveProgressWaiters(factWaiters, factsAppliedThrough)
+    mergeTouched(pendingRollupTouched, batch.touched)
+    pendingRollupFiles.set(file, batch.sequence ?? 0)
+    scheduleRollupFlush()
+  }
+
+  /**
+   * Drains persisted journal work in sequence order until the queue is empty.
+   *
+   * The queue item is removed before awaiting the fact write so the queue only
+   * represents pending work. Failed items are pushed back to the front.
    *
    * @returns {Promise<void>}
    */
-  async function processLoop() {
-    if (running || closed) return
-    running = true
-    while (queue.length > 0 && !closed) {
-      const batch = queue.shift()
-      try {
-        await flushBatch(batch)
-      } catch (error) {
-        logger.error("[usage-tracker] flush failed", toErrorMessage(error))
-        outbox.persist({
-          batchID: batch.batchID,
-          retryCount: (batch.retryCount ?? 0) + 1,
-          facts: batch.facts,
-          touched: batch.touched,
-          createdAt: batch.createdAt,
-        })
+  async function drainJournalQueue() {
+    try {
+      while (!closed && journalQueue.length > 0) {
+        const next = journalQueue.shift()
+        if (!next) continue
+
+        try {
+          await applyJournalFile(next.file)
+        } catch (error) {
+          const failure = error instanceof Error ? error : new Error(toErrorMessage(error))
+          journalFailure = failure
+          logger.error("[usage-tracker] flush failed", toErrorMessage(error))
+          journalQueue.unshift(next)
+          rejectProgressWaiters(factWaiters, failure)
+          return
+        }
+
+        await sleepFn(10)
       }
-      await sleepFn(10)
+    } finally {
+      journalDraining = false
+      if (!closed && !journalFailure && journalQueue.length > 0) {
+        kickJournalDrain()
+      }
     }
-    running = false
+  }
+
+  /**
+   * Starts draining the persisted journal queue if it is idle.
+   *
+   * @returns {void}
+   */
+  function kickJournalDrain() {
+    if (closed || journalDraining || journalQueue.length === 0) return
+
+    journalFailure = null
+    journalDraining = true
+
+    void drainJournalQueue()
+  }
+
+  /**
+   * Executes one rollup pass over the current touched working set.
+   *
+   * Journal files are only removed after rollup replacement succeeds.
+   *
+   * @returns {Promise<void>}
+   */
+  async function flushRollupsOnce() {
+    if (!hasTouched(pendingRollupTouched)) {
+      rollupsAppliedThrough = Math.max(rollupsAppliedThrough, factsAppliedThrough)
+      resolveProgressWaiters(rollupWaiters, rollupsAppliedThrough)
+      return
+    }
+
+    const touched = pendingRollupTouched
+    const files = Array.from(pendingRollupFiles.entries())
+    pendingRollupTouched = emptyTouched()
+    pendingRollupFiles = new Map()
+
+    try {
+      await init()
+      const rollups = await recomputeTouchedRollups(turso, touched)
+      await turso.replaceRollups(rollups)
+      for (const [file] of files) {
+        outbox.removeFile(file)
+      }
+      const maxCovered = files.reduce((max, [, sequence]) => Math.max(max, sequence), rollupsAppliedThrough)
+      rollupsAppliedThrough = Math.max(rollupsAppliedThrough, maxCovered)
+      resolveProgressWaiters(rollupWaiters, rollupsAppliedThrough)
+    } catch (error) {
+      const failure = error instanceof Error ? error : new Error(toErrorMessage(error))
+      rollupFailure = failure
+      logger.error("[usage-tracker] rollup flush failed", toErrorMessage(error))
+      mergeTouched(pendingRollupTouched, touched)
+      for (const [file, sequence] of files) {
+        pendingRollupFiles.set(file, sequence)
+      }
+      rejectProgressWaiters(rollupWaiters, failure)
+      scheduleRollupFlush()
+    }
+  }
+
+  /**
+   * Runs one detached rollup pass and then clears the running flag.
+   *
+   * If a second immediate pass was requested while the first was running, it is
+   * started after the current pass finishes.
+   *
+   * @returns {Promise<void>}
+   */
+  async function runRollupPass() {
+    try {
+      await flushRollupsOnce()
+    } finally {
+      rollupRunning = false
+      if (closed) return
+
+      const rerunNow = rollupKickRequested && !rollupFailure && hasTouched(pendingRollupTouched)
+      rollupKickRequested = false
+      if (rerunNow) {
+        kickRollupPass()
+      }
+    }
+  }
+
+  /**
+   * Starts one rollup pass if none is currently running.
+   *
+   * @returns {void}
+   */
+  function kickRollupPass() {
+    if (closed || !hasTouched(pendingRollupTouched)) return
+    if (rollupRunning) {
+      rollupKickRequested = true
+      return
+    }
+
+    rollupFailure = null
+    rollupRunning = true
+
+    void runRollupPass()
   }
 
   /**
@@ -221,37 +506,56 @@ export function createIngestionQueue({
     if (flushTimer) return
     flushTimer = setTimeoutFn(async () => {
       flushTimer = null
-      const hasPending = hasPendingFacts(pendingFacts)
-      if (!hasPending) return
-      queue.push({
-        batchID: randomUUID(),
-        createdAt: Date.now(),
-        facts: serializeFacts(pendingFacts),
-        touched: pendingTouched,
-      })
-      pendingFacts = emptyFacts()
-      pendingTouched = emptyTouched()
-      await processLoop()
+      let persisted = null
+      try {
+        persisted = await persistPendingBatch()
+      } catch (error) {
+        logger.error("[usage-tracker] persist failed", toErrorMessage(error))
+        if (!closed) scheduleFlush()
+        return
+      }
+      if (persisted === null) return
+      kickJournalDrain()
+      try {
+        await waitForFactsThrough(persisted)
+      } catch {}
     }, flushDelayMs)
   }
 
   /**
-   * Replays durable outbox files in order.
+   * Replays durable journal files in order and forces rollup convergence.
    *
    * @param {string[]} files
    * @returns {Promise<void>}
    */
   async function replayOutbox(files) {
+    let replayTarget = rollupsAppliedThrough
+
     for (const file of files) {
       if (closed) return
+
+      const batch = outbox.read(file)
+      const sequence = batch.sequence ?? 0
+      if (sequence <= factsAppliedThrough) continue
+
       try {
-        const payload = outbox.read(file)
-        await flushBatch(payload)
-        outbox.remove(payload.batchID)
+        enqueueJournalEntry({ file, sequence })
+        replayTarget = Math.max(replayTarget, sequence)
       } catch (error) {
         logger.error("[usage-tracker] replay failed", toErrorMessage(error))
+        return
       }
     }
+
+    if (rollupTimer) {
+      clearTimeoutFn(rollupTimer)
+      rollupTimer = null
+    }
+
+    kickJournalDrain()
+    await waitForFactsThrough(replayTarget)
+    kickRollupPass()
+    await waitForRollupsThrough(replayTarget)
   }
 
   return {
@@ -284,19 +588,23 @@ export function createIngestionQueue({
         clearTimeoutFn(flushTimer)
         flushTimer = null
       }
-      const hasPending = hasPendingFacts(pendingFacts)
-      if (hasPending) {
-        queue.push({
-          batchID: randomUUID(),
-          createdAt: Date.now(),
-          facts: serializeFacts(pendingFacts),
-          touched: pendingTouched,
-        })
-        pendingFacts = emptyFacts()
-        pendingTouched = emptyTouched()
+
+      let target = lastPersistedSequence
+      const persisted = await persistPendingBatch()
+      if (persisted !== null) {
+        target = persisted
       }
-      await processLoop()
-      await replayOutbox(outbox.list())
+
+      kickJournalDrain()
+      await waitForFactsThrough(target)
+
+      if (rollupTimer) {
+        clearTimeoutFn(rollupTimer)
+        rollupTimer = null
+      }
+
+      kickRollupPass()
+      await waitForRollupsThrough(target)
     },
     /** @returns {Promise<void>} */
     async close() {

@@ -4,22 +4,44 @@ import { createTrackerState } from "../normalize.js"
 import { createIngestionQueue } from "../queue.js"
 
 function createFakeOutbox() {
+  const compareFiles = (left, right) => left.localeCompare(right)
+
   return {
     root: "/tmp/outbox",
     processDir: "/tmp/outbox/pid-test",
     persisted: [],
+    records: new Map(),
+    removed: [],
+    orphanFiles: [],
     persist(batch) {
-      this.persisted.push(batch)
+      const sequence = batch.sequence ?? this.persisted.length + 1
+      const file = `/tmp/outbox/pid-test/${String(sequence).padStart(12, "0")}-${batch.batchID}.json`
+      const payload = { ...batch, sequence, factsAppliedAt: batch.factsAppliedAt ?? null, __file: file }
+      this.persisted.push(payload)
+      this.records.set(file, payload)
+      return { file, sequence }
     },
-    remove() {},
+    remove(batchID) {
+      const match = this.persisted.find((batch) => batch.batchID === batchID)
+      if (match) this.removeFile(match.__file)
+    },
+    removeFile(file) {
+      this.removed.push(file)
+      this.persisted = this.persisted.filter((batch) => batch.__file !== file)
+      this.records.delete(file)
+      this.orphanFiles = this.orphanFiles.filter((entry) => entry !== file)
+    },
     list() {
-      return []
+      return this.persisted.map((batch) => batch.__file).sort(compareFiles)
     },
-    read() {
-      throw new Error("not used in test")
+    read(file) {
+      const batch = this.records.get(file)
+      if (!batch) throw new Error(`unknown batch file: ${file}`)
+      const { __file, ...payload } = batch
+      return payload
     },
     listAllOrphans() {
-      return []
+      return [...this.orphanFiles].sort(compareFiles)
     },
   }
 }
@@ -122,6 +144,7 @@ function createQueueHarness(options = {}) {
     outbox,
     turso,
     flushDelayMs: options.flushDelayMs ?? 150,
+    rollupDelayMs: options.rollupDelayMs ?? 15000,
     setTimeoutFn: timers.setTimeoutFn,
     clearTimeoutFn: timers.clearTimeoutFn,
     sleepFn: async () => {},
@@ -259,6 +282,7 @@ describe("ingestion queue", () => {
 
     expect(harness.turso.counters.ensureSchemaCount).toBe(1)
     expect(harness.turso.counters.writeFactsCount).toBe(1)
+    expect(harness.outbox.persisted).toHaveLength(0)
     expect(harness.turso.counters.writes[0]).toMatchObject({
       projects: [
         {
@@ -280,40 +304,161 @@ describe("ingestion queue", () => {
     await harness.timers.runNextTimer()
 
     expect(harness.turso.counters.writeFactsCount).toBe(1)
-    expect(harness.timers.pendingCount()).toBe(0)
+    expect(harness.turso.counters.queryCount).toBe(0)
+    expect(harness.timers.pendingCount()).toBe(1)
   })
 
-  it("exposes the current hot-path rollup baseline without hard-coding it", async () => {
+  it("persists a flushed batch before remote fact writes begin under the durable journal model", async () => {
     const harness = createQueueHarness()
 
-    const events = await enqueueRepresentativeHotPath(harness.queue)
+    await harness.queue.enqueue(createSessionCreatedEvent())
+    await harness.queue.enqueue(createUserMessageEvent())
 
-    expect(events.map((event) => event.type)).toEqual([
-      "session.created",
-      "message.updated",
-      "message.updated",
-      "message.part.updated",
-    ])
+    await harness.timers.runNextTimer()
+
+    expect(harness.outbox.persisted).toHaveLength(1)
+    expect(harness.outbox.persisted[0]).toMatchObject({
+      sequence: 1,
+      factsAppliedAt: null,
+    })
+    expect(harness.turso.counters.writeFactsCount).toBe(1)
+  })
+
+  it("replays surviving durable batches in explicit deterministic order after restart", async () => {
+    const outbox = createFakeOutbox()
+    const harness = createQueueHarness({ outbox })
+
+    outbox.persist({
+      batchID: "batch-b",
+      sequence: 2,
+      createdAt: 2000,
+      facts: {
+        projects: [],
+        sessions: [{ id: "ses_later", project_id: "proj_1" }],
+        turns: [],
+        responses: [],
+        response_parts: [],
+        llm_steps: [],
+        tool_calls: [],
+        tool_payloads: [],
+      },
+      touched: {
+        projectIDs: ["proj_1"],
+        sessionIDs: ["ses_later"],
+        rootSessionIDs: ["ses_later"],
+        days: [],
+        projectDayKeys: [],
+        modelKeys: [],
+        toolKeys: [],
+      },
+    })
+    outbox.persist({
+      batchID: "batch-a",
+      sequence: 1,
+      createdAt: 1000,
+      facts: {
+        projects: [],
+        sessions: [{ id: "ses_earlier", project_id: "proj_1" }],
+        turns: [],
+        responses: [],
+        response_parts: [],
+        llm_steps: [],
+        tool_calls: [],
+        tool_payloads: [],
+      },
+      touched: {
+        projectIDs: ["proj_1"],
+        sessionIDs: ["ses_earlier"],
+        rootSessionIDs: ["ses_earlier"],
+        days: [],
+        projectDayKeys: [],
+        modelKeys: [],
+        toolKeys: [],
+      },
+    })
+    outbox.orphanFiles = outbox.list()
+
+    await harness.queue.replayAllOutbox()
+
+    expect(harness.turso.counters.writes.map((facts) => facts.sessions[0]?.id)).toEqual(["ses_earlier", "ses_later"])
+  })
+
+  it("keeps hot-path rollup query count at zero until the rollup timer fires", async () => {
+    const harness = createQueueHarness()
+
+    await enqueueRepresentativeHotPath(harness.queue)
+
     expect(harness.ensureEventContextCalls).toHaveLength(4)
     expect(harness.timers.pendingCount()).toBe(1)
 
     await harness.timers.runNextTimer()
 
     expect(harness.turso.counters.writeFactsCount).toBeGreaterThan(0)
+    expect(harness.turso.counters.replaceRollupsCount).toBe(0)
+    expect(harness.turso.counters.queryCount).toBe(0)
+    expect(harness.timers.pendingCount()).toBe(1)
+
+    await harness.timers.runNextTimer()
+
     expect(harness.turso.counters.replaceRollupsCount).toBeGreaterThan(0)
     expect(harness.turso.counters.queryCount).toBeGreaterThan(0)
     expect(harness.turso.counters.queries.some((entry) => entry.sql.includes("tool_calls"))).toBe(true)
   })
 
-  it.todo("persists a flushed batch before remote fact writes begin under the durable journal model")
+  it("keeps durable work pending when a background rollup pass fails", async () => {
+    const harness = createQueueHarness()
+    harness.turso.fail.replaceRollups = 1
 
-  it.todo("replays surviving durable batches in explicit deterministic order after restart")
+    await enqueueRepresentativeHotPath(harness.queue)
+    await harness.timers.runNextTimer()
 
-  it.todo("keeps hot-path rollup query count at zero until the rollup timer fires")
+    expect(harness.outbox.persisted).toHaveLength(1)
 
-  it.todo("keeps durable work pending when a background rollup pass fails")
+    await harness.timers.runNextTimer()
 
-  it.todo("drains durable fact work and durable rollup work before flush returns")
+    expect(harness.turso.counters.replaceRollupsCount).toBe(1)
+    expect(harness.outbox.persisted).toHaveLength(1)
+    expect(harness.timers.pendingCount()).toBe(1)
+  })
 
-  it.todo("forces orphan replay to converge rollups before returning")
+  it("drains durable fact work and durable rollup work before flush returns", async () => {
+    const harness = createQueueHarness()
+
+    await enqueueRepresentativeHotPath(harness.queue)
+
+    expect(harness.outbox.persisted).toHaveLength(0)
+    expect(harness.turso.counters.writeFactsCount).toBe(0)
+    expect(harness.turso.counters.replaceRollupsCount).toBe(0)
+
+    await harness.queue.flush()
+
+    expect(harness.turso.counters.writeFactsCount).toBe(1)
+    expect(harness.turso.counters.replaceRollupsCount).toBe(1)
+    expect(harness.turso.counters.queryCount).toBeGreaterThan(0)
+    expect(harness.outbox.persisted).toHaveLength(0)
+    expect(harness.timers.pendingCount()).toBe(0)
+  })
+
+  it("forces orphan replay to converge rollups before returning", async () => {
+    const outbox = createFakeOutbox()
+    const firstHarness = createQueueHarness({ outbox })
+
+    await firstHarness.queue.enqueue(createSessionCreatedEvent())
+    await firstHarness.queue.enqueue(createUserMessageEvent())
+    await firstHarness.queue.enqueue(createAssistantMessageEvent())
+    await firstHarness.queue.enqueue(createToolPartEvent())
+    await firstHarness.timers.runNextTimer()
+
+    outbox.orphanFiles = outbox.list()
+
+    const replayHarness = createQueueHarness({ outbox, turso: firstHarness.turso })
+
+    await replayHarness.queue.replayAllOutbox()
+
+    expect(firstHarness.turso.counters.writeFactsCount).toBe(2)
+    expect(firstHarness.turso.counters.replaceRollupsCount).toBe(1)
+    expect(firstHarness.turso.counters.queryCount).toBeGreaterThan(0)
+    expect(outbox.orphanFiles).toHaveLength(0)
+    expect(outbox.persisted).toHaveLength(0)
+  })
 })

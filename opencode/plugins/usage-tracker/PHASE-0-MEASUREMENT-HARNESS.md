@@ -1,188 +1,131 @@
 # Phase 0: Measurement Harness
 
-## Quick Check
+## Execution Snapshot
 
-1. Dependency status: none. This is the first actionable phase.
-2. Can an agent start now: yes, if the current `usage-tracker` tests are runnable.
-3. Main outcome: deterministic test infrastructure exists, and the current read-heavy baseline is observable.
+1. Phase number: 0
+2. Source plan: `plugins/usage-tracker/BACKGROUND-ROLLUP-PLAN.md`
+3. Readiness: `Ready`
+4. Primary deliverable: deterministic queue test harness and realistic SQLite fixture foundation
+5. Blocking dependencies: none
+6. Target measurements summary: observability only, not performance improvement yet
+7. Next phase: `PHASE-1-END-STATE-TESTS.md`
 
-## What This Phase Is About
+## Why This Phase Exists
 
-This phase builds the tooling needed to measure the current hot path before changing queue behavior.
+This phase creates the test and measurement foundation needed before runtime behavior changes. The source plan now depends on two kinds of evidence:
 
-It is not the phase that reduces read volume. It creates the harness that lets later phases prove they reduced read volume.
+1. narrow queue tests for scheduling, durability, and replay behavior
+2. SQLite fixture-backed tests for realistic OpenCode data shapes
 
-The phase has three jobs:
+Without this phase, later phases would be forced to change queue behavior and invent their proof at the same time.
 
-1. Make queue tests deterministic.
-2. Make fake Turso activity measurable.
-3. Make the representative hot-path event sequence reusable.
+## Start Criteria
+
+1. `plugins/usage-tracker/test/queue.test.js` exists
+2. `plugins/usage-tracker/test/history.test.js` exists
+3. `createIngestionQueue()` in `plugins/usage-tracker/queue.js` is available for injected timers and fake dependencies
+4. local tracker tests are runnable
+
+Current evidence:
+
+1. `bun test plugins/usage-tracker/test/queue.test.js` passes
+2. `bun test plugins/usage-tracker/test` passes
+
+## Dependencies And How To Check Them
+
+1. Dependency: runnable tracker test suite
+Why it matters: this phase is only useful if the harness can be exercised locally
+How to verify: run `bun test plugins/usage-tracker/test/queue.test.js` and `bun test plugins/usage-tracker/test`
+Status: `Done`
+
+2. Dependency: existing fake timer injection points in `createIngestionQueue()`
+Why it matters: later phases require deterministic scheduling tests
+How to verify: inspect `plugins/usage-tracker/queue.js` for `setTimeoutFn`, `clearTimeoutFn`, and `sleepFn` options
+Status: `Done`
+
+3. Dependency: SQLite-backed tracker tests already exist
+Why it matters: the fixture approach should extend an existing pattern rather than introduce a new test style from scratch
+How to verify: inspect `plugins/usage-tracker/test/history.test.js`
+Status: `Done`
+
+## Target Measurements And Gates
+
+Entry gates:
+
+1. Measurement: queue tests run locally
+Pass condition: `bun test plugins/usage-tracker/test/queue.test.js` succeeds
+Measurement method: run the command
+Current evidence: passing
+Status: `Met`
+
+2. Measurement: broader tracker tests run locally
+Pass condition: `bun test plugins/usage-tracker/test` succeeds
+Measurement method: run the command
+Current evidence: passing
+Status: `Met`
+
+Exit gates:
+
+1. Measurement: fake Turso harness exposes `writeFactsCount`, `replaceRollupsCount`, `queryCount`, and captured queries
+Pass condition: counters and recorded calls are available in tests
+Measurement method: inspect `plugins/usage-tracker/test/queue.test.js`
+Current evidence: already present
+Status: `Met`
+
+2. Measurement: deterministic timer harness exists
+Pass condition: tests can run queued callbacks without real sleeps
+Measurement method: inspect `createFakeTimers()` and run queue tests
+Current evidence: already present
+Status: `Met`
+
+3. Measurement: fixture foundation exists
+Pass condition: committed SQLite fixture directory and helper exist, or this phase creates them
+Measurement method: check for `plugins/usage-tracker/test/fixtures/`
+Current evidence: not present
+Status: `Not Met`
 
 ## Scope
 
-In scope:
+1. keep and, if needed, refine the fake Turso harness in `plugins/usage-tracker/test/queue.test.js`
+2. keep and, if needed, refine deterministic timer helpers for queue tests
+3. add committed SQLite fixture files under `plugins/usage-tracker/test/fixtures/`
+4. add a small fixture helper if tests need a shared way to locate or copy fixture DBs
+5. extract or keep reusable representative event helpers for synthetic queue tests
 
-1. `plugins/usage-tracker/test/queue.test.js`
-2. `plugins/usage-tracker/queue.js`
-3. `plugins/usage-tracker/index.d.ts` only if queue option types need documenting
+## Out Of Scope
 
-Out of scope:
-
-1. changing rollup timing semantics
-2. changing rollup SQL
-3. changing outbox durability rules
+1. changing runtime rollup timing semantics
+2. changing queue durability behavior
+3. changing rollup SQL
 4. changing normalization behavior
-
-## Dependencies
-
-This phase has no prior implementation dependency.
-
-It does depend on a stable local test environment:
-
-1. `bun test plugins/usage-tracker/test/queue.test.js` must run locally
-2. the existing queue tests should already be green before refactoring begins
-
-## Can Start When
-
-An agent can start this phase immediately when all of these are true:
-
-1. the queue test file exists and is readable
-2. `createIngestionQueue()` can be modified safely
-3. there is no parallel queue refactor in progress that would make the harness stale before it lands
-
-## Stop And Investigate If
-
-1. the harness cannot observe any `turso.query()` calls from the current hot path
-2. the test fixture does not exercise `message.part.updated` tool events
-3. timer behavior still depends on real sleeps or wall-clock timing after the phase is complete
-
-If any of those happen, the phase is incomplete even if the tests pass.
-
-## Target Measurements
-
-This phase does not have a performance win target yet. It has observability targets.
-
-The harness must let later phases inspect at least these values:
-
-1. `writeFactsCount`
-2. `replaceRollupsCount`
-3. `queryCount`
-4. `queries` for debugging unexpected fanout
-5. scheduled timer count or scheduled timer handles
-
-The baseline measurement to capture during development is:
-
-1. representative event sequence used
-2. `writeFactsCount`
-3. `queryCount`
-4. `replaceRollupsCount`
-
-Expected baseline shape before later phases:
-
-1. `writeFactsCount > 0`
-2. `queryCount > 0`
-3. `replaceRollupsCount > 0`
-
-Do not hard-code the bad baseline into committed tests. Record it in notes or a PR description only.
-
-## Files Likely To Change
-
-Primary files:
-
-1. `plugins/usage-tracker/test/queue.test.js`
-2. `plugins/usage-tracker/queue.js`
-
-Possible supporting file:
-
-1. `plugins/usage-tracker/index.d.ts`
-
-Files that should not change in this phase unless absolutely necessary:
-
-1. `plugins/usage-tracker/rollups.js`
-2. `plugins/usage-tracker/outbox.js`
-3. `plugins/usage-tracker/normalize.js`
+5. adding trigger heuristics or thresholds
 
 ## Implementation Details
 
-### 1. Build A Fake Turso Client With Counters
+1. The fake Turso client in `plugins/usage-tracker/test/queue.test.js` already tracks `ensureSchemaCount`, `writeFactsCount`, `replaceRollupsCount`, `queryCount`, `queries`, and `replaceRollupsPayloads`. Preserve those counters as the baseline queue harness.
+2. The timer harness already exposes `runNextTimer()` and `runAllTimers()`. Preserve that deterministic structure so later phases do not introduce wall-clock waiting.
+3. Add a committed SQLite fixture directory using the OpenCode table shape that `history.js` already expects: `session`, `message`, and `part`.
+4. Keep fixture files small and sanitized. The goal is realistic shape, not a full private database snapshot.
+5. Reuse the existing representative event helper pattern in `queue.test.js` for narrow scheduler tests. Do not replace every queue test with fixture-driven tests.
 
-The fake Turso client should support the exact queue interactions needed by the tests.
+## Execution Checklist
 
-Recommended tracked fields:
+1. Verify current queue and tracker tests pass locally.
+2. Keep the fake Turso harness stable and confirm it records the counters needed by later phases.
+3. Keep the fake timer harness stable and confirm queued timers can be drained deterministically.
+4. Add `plugins/usage-tracker/test/fixtures/`.
+5. Add the smallest shared fixture helper needed by later phases.
+6. Create committed SQLite fixtures for simple turn, tool-heavy turn, lineage, and historical hydration scenarios.
+7. Confirm the fixture files can be opened and consumed from tests without reading a developer-specific DB path.
 
-1. `ensureSchemaCount`
-2. `writeFactsCount`
-3. `replaceRollupsCount`
-4. `queryCount`
-5. `queries`
-6. `replaceRollupsPayloads`
+## Files And Systems Likely Affected
 
-Recommended methods:
-
-1. `ensureSchema()`
-2. `writeFacts(facts)`
-3. `replaceRollups(rollups)`
-4. `query(sql, args)`
-5. `close()`
-
-The fake should also support simple failure injection later, even if that is not fully used yet.
-
-Recommended configurable failpoints:
-
-1. fail next `writeFacts`
-2. fail next `query`
-3. fail next `replaceRollups`
-
-### 2. Build A Deterministic Timer Harness
-
-Do not rely on real `setTimeout()` in queue unit tests.
-
-Add queue dependency injection points for:
-
-1. `setTimeoutFn`
-2. `clearTimeoutFn`
-3. `rollupDelayMs`
-
-Even if the production behavior does not use all of these yet, this phase should make them injectable so later phases stay deterministic.
-
-Recommended fake timer behavior:
-
-1. store scheduled callbacks in an array
-2. return a handle object for each scheduled callback
-3. mark handles as cleared instead of removing them eagerly
-4. expose `runNextTimer()` and optionally `runAllTimers()` helpers for tests
-
-### 3. Extract A Representative Event Sequence Helper
-
-The test file should stop repeating low-level event literals.
-
-Create one helper that exercises the hot path that matters for read amplification:
-
-1. `session.created`
-2. user `message.updated`
-3. assistant `message.updated`
-4. tool `message.part.updated` with `tool: "read"`
-
-This sequence is the minimum realistic path that touches:
-
-1. facts
-2. sessions
-3. days
-4. model keys
-5. tool keys
-6. rollup recomputation
-
-### 4. Keep Behavior Unchanged In This Phase
-
-Phase 0 is allowed to add injection points and helpers, but it should not change the runtime rollup consistency model.
-
-Specifically:
-
-1. do not defer rollups yet
-2. do not introduce pending rollup state yet
-3. do not rewrite `flush()` semantics yet
-
-If behavior changes in this phase, later measurements become harder to trust.
+1. `plugins/usage-tracker/test/queue.test.js`
+2. `plugins/usage-tracker/test/history.test.js`
+3. `plugins/usage-tracker/test/fixtures/`
+4. `plugins/usage-tracker/test/fixture-db.js` if added
+5. `plugins/usage-tracker/queue.js` only if a tiny harness-oriented injection cleanup is needed
+6. `plugins/usage-tracker/index.d.ts` only if test injection types need documenting
 
 ## Verification
 
@@ -190,37 +133,50 @@ Run:
 
 ```bash
 bun test plugins/usage-tracker/test/queue.test.js
-```
-
-Then verify manually from the test harness or debug output:
-
-1. a representative hot-path event sequence can be run without real sleeping
-2. the fake Turso records `queryCount`
-3. the current implementation still shows rollup-related reads on the hot path
-
-Optional follow-up command:
-
-```bash
+bun test plugins/usage-tracker/test/history.test.js
 bun test plugins/usage-tracker/test
 ```
 
-## Exit Criteria
+Then verify:
 
-This phase is complete when all of these are true:
+1. fake Turso counters are still observable in queue tests
+2. queue tests still use deterministic timers rather than real waiting
+3. committed SQLite fixtures exist and are readable from tests
+4. no runtime behavior changed yet
 
-1. queue tests are deterministic
-2. fake Turso counters exist and are easy to inspect
-3. the representative event sequence exists as reusable test setup
-4. the current bad baseline is observable without hard-coding it into assertions
-5. no behavior change has been introduced yet
+## Done Criteria
 
-## Handoff To Phase 1
+1. queue tests remain deterministic
+2. fake Turso counters remain visible and usable by later phases
+3. committed SQLite fixtures exist under `plugins/usage-tracker/test/fixtures/`
+4. fixture access does not depend on `~/.local/share/opencode/opencode.db`
+5. tracker tests still pass
 
-Phase 1 assumes the following artifacts exist:
+## Handoff To Next Phase
 
-1. fake Turso counter harness
-2. fake timer harness
-3. representative event sequence helper
-4. an observed baseline showing that the current hot path still performs rollup reads
+Next phase: `PHASE-1-END-STATE-TESTS.md`
 
-The next phase uses this harness to define the future contract without guessing.
+This phase must deliver:
+
+1. stable fake Turso counters
+2. stable fake timer helpers
+3. committed SQLite fixtures
+4. reusable test setup for representative event shapes
+
+What becomes unblocked:
+
+1. Phase 1 can define the end-state contract using both narrow queue tests and realistic fixture-backed integration tests.
+
+## Open Questions Or Blockers
+
+1. Unknown: whether the fixture helper should copy DB files to a temp path before mutation or keep every fixture strictly read-only in tests
+
+## Sources
+
+1. `plugins/usage-tracker/BACKGROUND-ROLLUP-PLAN.md`, Step 1 and Step 2
+2. `plugins/usage-tracker/test/queue.test.js`
+3. `plugins/usage-tracker/test/history.test.js`
+4. `plugins/usage-tracker/queue.js`
+5. Local verification commands:
+6. `bun test plugins/usage-tracker/test/queue.test.js`
+7. `bun test plugins/usage-tracker/test`

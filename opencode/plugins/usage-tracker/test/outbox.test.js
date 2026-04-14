@@ -13,7 +13,7 @@ describe('outbox', () => {
 
     try {
       const outbox = createOutbox('pid-test')
-      const persistedPath = outbox.persist({
+      const persisted = outbox.persist({
         batchID: 'batch-1',
         createdAt: 1000,
         facts: {
@@ -35,12 +35,18 @@ describe('outbox', () => {
           toolKeys: [],
         },
       })
+      const persistedPath = persisted.file
 
       writeFileSync(join(outbox.processDir, 'dangling.json.tmp'), '{"partial":true}')
 
-      expect(persistedPath).toBe(join(homedir(), '.local', 'share', 'opencode', 'usage-outbox', 'pid-test', 'batch-1.json'))
+      expect(persistedPath).toBe(join(homedir(), '.local', 'share', 'opencode', 'usage-outbox', 'pid-test', '000000000001-batch-1.json'))
+      expect(persisted.sequence).toBe(1)
       expect(outbox.list()).toEqual([persistedPath])
-      expect(JSON.parse(readFileSync(persistedPath, 'utf8')).batchID).toBe('batch-1')
+      expect(JSON.parse(readFileSync(persistedPath, 'utf8'))).toMatchObject({
+        batchID: 'batch-1',
+        sequence: 1,
+        factsAppliedAt: null,
+      })
     } finally {
       rmSync(join(homedir(), '.local', 'share', 'opencode', 'usage-outbox', 'pid-test'), { recursive: true, force: true })
       rmSync(home, { recursive: true, force: true })
