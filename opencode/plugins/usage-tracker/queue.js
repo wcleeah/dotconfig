@@ -173,7 +173,9 @@ export function createIngestionQueue({
   let lastPersistedSequence = 0
   let factsAppliedThrough = 0
   let rollupsAppliedThrough = 0
+  let nextProgressIndex = 1
   let journalQueue = []
+  let journalProgress = new Map()
   let journalDraining = false
   let rollupRunning = false
   let rollupKickRequested = false
@@ -223,7 +225,7 @@ export function createIngestionQueue({
   }
 
   /**
-   * Waits until the provided progress marker reaches the target sequence.
+   * Waits until the provided progress marker reaches the target index.
    *
    * @param {Map<number, Array<{ resolve: () => void, reject: (error: Error) => void }>>} waiters
    * @param {() => number} current
@@ -244,7 +246,7 @@ export function createIngestionQueue({
   }
 
   /**
-   * Waits until fact writes have been applied through the target sequence.
+   * Waits until fact writes have been applied through the target index.
    *
    * @param {number} target
    * @returns {Promise<void>}
@@ -254,7 +256,7 @@ export function createIngestionQueue({
   }
 
   /**
-   * Waits until rollups have converged through the target sequence.
+   * Waits until rollups have converged through the target index.
    *
    * @param {number} target
    * @returns {Promise<void>}
@@ -264,16 +266,36 @@ export function createIngestionQueue({
   }
 
   /**
+   * Returns the deterministic progress index for a journal file, creating it if needed.
+   *
+   * Progress indices are queue-local and monotonic. They are used only for
+   * in-process waiting semantics, which avoids assuming that per-process durable
+   * sequence numbers can be compared globally across orphan directories.
+   *
+   * @param {string} file
+   * @returns {number}
+   */
+  function progressIndexForFile(file) {
+    const existing = journalProgress.get(file)
+    if (existing) return existing
+
+    const created = nextProgressIndex++
+    journalProgress.set(file, created)
+    return created
+  }
+
+  /**
    * Queues one persisted journal entry for fact application.
    *
    * @param {{ file: string, sequence: number }} entry
    * @returns {number}
    */
   function enqueueJournalEntry(entry) {
-    if (journalQueue.some((queued) => queued.file === entry.file)) return entry.sequence
+    const progress = progressIndexForFile(entry.file)
+    if (journalQueue.some((queued) => queued.file === entry.file)) return progress
     journalQueue.push(entry)
     journalQueue.sort((left, right) => left.sequence - right.sequence || left.file.localeCompare(right.file))
-    return entry.sequence
+    return progress
   }
 
   /**
@@ -285,8 +307,7 @@ export function createIngestionQueue({
   async function persistJournalBatch(batch) {
     const entry = outbox.persist(batch)
     lastPersistedSequence = entry.sequence
-    enqueueJournalEntry(entry)
-    return entry.sequence
+    return enqueueJournalEntry(entry)
   }
 
   /**
@@ -345,23 +366,25 @@ export function createIngestionQueue({
    */
   async function applyJournalFile(file) {
     const batch = outbox.read(file)
+    const progress = progressIndexForFile(file)
 
     await init()
     await turso.writeFacts(batch.facts)
 
     if (!hasTouched(batch.touched)) {
       outbox.removeFile(file)
-      factsAppliedThrough = Math.max(factsAppliedThrough, batch.sequence ?? 0)
+      journalProgress.delete(file)
+      factsAppliedThrough = Math.max(factsAppliedThrough, progress)
       resolveProgressWaiters(factWaiters, factsAppliedThrough)
-      rollupsAppliedThrough = Math.max(rollupsAppliedThrough, batch.sequence ?? 0)
+      rollupsAppliedThrough = Math.max(rollupsAppliedThrough, progress)
       resolveProgressWaiters(rollupWaiters, rollupsAppliedThrough)
       return
     }
 
-    factsAppliedThrough = Math.max(factsAppliedThrough, batch.sequence ?? 0)
+    factsAppliedThrough = Math.max(factsAppliedThrough, progress)
     resolveProgressWaiters(factWaiters, factsAppliedThrough)
     mergeTouched(pendingRollupTouched, batch.touched)
-    pendingRollupFiles.set(file, batch.sequence ?? 0)
+    pendingRollupFiles.set(file, progress)
     scheduleRollupFlush()
   }
 
@@ -439,8 +462,9 @@ export function createIngestionQueue({
       await turso.replaceRollups(rollups)
       for (const [file] of files) {
         outbox.removeFile(file)
+        journalProgress.delete(file)
       }
-      const maxCovered = files.reduce((max, [, sequence]) => Math.max(max, sequence), rollupsAppliedThrough)
+      const maxCovered = files.reduce((max, [, progress]) => Math.max(max, progress), rollupsAppliedThrough)
       rollupsAppliedThrough = Math.max(rollupsAppliedThrough, maxCovered)
       resolveProgressWaiters(rollupWaiters, rollupsAppliedThrough)
     } catch (error) {
@@ -536,11 +560,10 @@ export function createIngestionQueue({
 
       const batch = outbox.read(file)
       const sequence = batch.sequence ?? 0
-      if (sequence <= factsAppliedThrough) continue
 
       try {
-        enqueueJournalEntry({ file, sequence })
-        replayTarget = Math.max(replayTarget, sequence)
+        const progress = enqueueJournalEntry({ file, sequence })
+        replayTarget = Math.max(replayTarget, progress)
       } catch (error) {
         logger.error("[usage-tracker] replay failed", toErrorMessage(error))
         return
@@ -558,12 +581,38 @@ export function createIngestionQueue({
     await waitForRollupsThrough(replayTarget)
   }
 
+  /**
+   * Rebuilds in-memory recovery state from surviving durable journal files.
+   *
+   * Startup recovery re-establishes deterministic local ordering and then lets
+   * the normal journal drain and rollup paths resume automatically.
+   *
+   * @returns {Promise<void>}
+   */
+  async function recoverFromJournal() {
+    const files = outbox.listAllOrphans()
+    if (files.length === 0) return
+
+    let recoveryTarget = rollupsAppliedThrough
+
+    for (const file of files) {
+      const batch = outbox.read(file)
+      const progress = enqueueJournalEntry({ file, sequence: batch.sequence ?? 0 })
+      recoveryTarget = Math.max(recoveryTarget, progress)
+      lastPersistedSequence = Math.max(lastPersistedSequence, batch.sequence ?? 0)
+    }
+
+    kickJournalDrain()
+    await waitForFactsThrough(recoveryTarget)
+    kickRollupPass()
+    await waitForRollupsThrough(recoveryTarget)
+  }
+
   return {
     processID,
     /** @returns {Promise<void>} */
     async start() {
-      // Startup stays local and synchronous. Schema creation and writes happen
-      // on the first real flush so plugin initialization does not wait on Turso.
+      await recoverFromJournal()
     },
     /**
      * Normalizes and queues one OpenCode event.

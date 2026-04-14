@@ -4,9 +4,9 @@
 
 1. Phase number: 3
 2. Source plan: `plugins/usage-tracker/BACKGROUND-ROLLUP-PLAN.md`
-3. Readiness: `Blocked`
+3. Readiness: `Completed`
 4. Primary deliverable: deterministic startup recovery, `flush()`, and orphan replay convergence on top of durable timer-only scheduling
-5. Blocking dependencies: Phase 2 scheduling work is not yet present
+5. Blocking dependencies: none
 6. Target measurements summary: `queue.flush()` drains journal-backed fact work and journal-backed rollup work before returning
 7. Next phase: `PHASE-4-FAILURE-AND-DURABILITY.md`
 
@@ -22,14 +22,17 @@ Normal runtime is allowed to be eventually consistent. Maintenance paths and res
 
 Current evidence:
 
-1. none of those deliverables are visible in the repo yet
+1. Phase 2 timer-only scheduling is implemented and tested
+2. `queue.flush()` already forces journal-backed fact and rollup convergence
+3. startup recovery now scans surviving durable journal files and resumes convergence automatically
+4. orphan replay remains deterministic and convergent
 
 ## Dependencies And How To Check Them
 
 1. Dependency: Phase 2 background scheduling and durable journal introduction
 Why it matters: there is nothing to force-converge until rollup work is actually deferred and journal-backed
 How to verify: inspect `plugins/usage-tracker/queue.js` for `rollupDelayMs`, timer-based `flushRollups()`, no inline rollup recomputation in `flushBatch()`, and durable journal writes before remote fact writes
-Status: `Not Done`
+Status: `Done`
 
 ## Target Measurements And Gates
 
@@ -38,28 +41,28 @@ Entry gates:
 1. Measurement: durable timer-only scheduling exists
 Pass condition: deferred rollup scheduler and mainline durable journal are implemented and tested
 Measurement method: inspect code and run queue tests
-Current evidence: not implemented yet
-Status: `Not Met`
+Current evidence: implemented in `plugins/usage-tracker/queue.js` and covered by `plugins/usage-tracker/test/queue.test.js`
+Status: `Met`
 
 Exit gates:
 
 1. Measurement: forced convergence
 Pass condition: `queue.flush()` returns only after journal-backed fact and rollup work are complete for already-known work
 Measurement method: queue tests
-Current evidence: not yet implemented
-Status: `Not Met`
+Current evidence: implemented and covered by `queue.test.js`
+Status: `Met`
 
 2. Measurement: startup recovery
 Pass condition: startup or initialization scans the durable journal and rebuilds the working state needed for later convergence
 Measurement method: queue tests and code inspection
-Current evidence: not yet implemented
-Status: `Not Met`
+Current evidence: implemented and covered by `queue.test.js`
+Status: `Met`
 
 3. Measurement: orphan replay convergence
 Pass condition: orphan replay returns only after facts and rollups are converged
 Measurement method: queue tests and replay-focused tests
-Current evidence: not yet implemented in the durable-journal model
-Status: `Not Met`
+Current evidence: implemented and covered by `queue.test.js`
+Status: `Met`
 
 ## Scope
 
@@ -146,7 +149,7 @@ What becomes unblocked:
 
 ## Open Questions Or Blockers
 
-1. Blocker: Phase 2 durable scheduler is not yet present in the repo
+1. Remaining work moves to Phase 4: failure hardening, cleanup correctness under failure, and replay-tooling alignment
 
 ## Sources
 

@@ -132,6 +132,16 @@ function createFakeTurso() {
   }
 }
 
+function createDeferred() {
+  let resolve = () => {}
+  let reject = () => {}
+  const promise = new Promise((nextResolve, nextReject) => {
+    resolve = nextResolve
+    reject = nextReject
+  })
+  return { promise, resolve, reject }
+}
+
 function createQueueHarness(options = {}) {
   const timers = createFakeTimers()
   const outbox = options.outbox ?? createFakeOutbox()
@@ -460,5 +470,89 @@ describe("ingestion queue", () => {
     expect(firstHarness.turso.counters.queryCount).toBeGreaterThan(0)
     expect(outbox.orphanFiles).toHaveLength(0)
     expect(outbox.persisted).toHaveLength(0)
+  })
+
+  it("startup recovery scans surviving journal files and converges before start returns", async () => {
+    const outbox = createFakeOutbox()
+    const harness = createQueueHarness({ outbox })
+
+    outbox.persist({
+      batchID: "batch-startup",
+      sequence: 7,
+      createdAt: 7000,
+      facts: {
+        projects: [],
+        sessions: [{ id: "ses_startup", project_id: "proj_1", root_session_id: "ses_startup" }],
+        turns: [],
+        responses: [],
+        response_parts: [],
+        llm_steps: [],
+        tool_calls: [],
+        tool_payloads: [],
+      },
+      touched: {
+        projectIDs: ["proj_1"],
+        sessionIDs: ["ses_startup"],
+        rootSessionIDs: ["ses_startup"],
+        days: ["2026-01-01"],
+        projectDayKeys: [["proj_1", "2026-01-01"]],
+        modelKeys: [],
+        toolKeys: [],
+      },
+    })
+    outbox.orphanFiles = outbox.list()
+
+    await harness.queue.start()
+
+    expect(harness.turso.counters.writeFactsCount).toBe(1)
+    expect(harness.turso.counters.replaceRollupsCount).toBe(1)
+    expect(harness.turso.counters.queryCount).toBeGreaterThan(0)
+    expect(outbox.persisted).toHaveLength(0)
+    expect(outbox.orphanFiles).toHaveLength(0)
+  })
+
+  it("flush waits for an already-started journal drain without losing work", async () => {
+    const writeGate = createDeferred()
+    const turso = createFakeTurso()
+    const originalWriteFacts = turso.writeFacts
+    turso.writeFacts = async (facts) => {
+      await writeGate.promise
+      return await originalWriteFacts(facts)
+    }
+
+    const harness = createQueueHarness({ turso })
+
+    await enqueueRepresentativeHotPath(harness.queue)
+    const timerRun = harness.timers.runNextTimer()
+    await Promise.resolve()
+
+    const flushRun = harness.queue.flush()
+    await Promise.resolve()
+
+    expect(harness.outbox.persisted).toHaveLength(1)
+    expect(harness.turso.counters.writeFactsCount).toBe(0)
+
+    writeGate.resolve()
+    await timerRun
+    await flushRun
+
+    expect(harness.turso.counters.writeFactsCount).toBe(1)
+    expect(harness.turso.counters.replaceRollupsCount).toBe(1)
+    expect(harness.outbox.persisted).toHaveLength(0)
+  })
+
+  it("concurrent flush calls converge the same already-known work", async () => {
+    const harness = createQueueHarness()
+
+    await enqueueRepresentativeHotPath(harness.queue)
+
+    const [first, second] = await Promise.all([harness.queue.flush(), harness.queue.flush()])
+
+    expect(first).toBeUndefined()
+    expect(second).toBeUndefined()
+    expect(harness.turso.counters.writeFactsCount).toBe(1)
+    expect(harness.turso.counters.replaceRollupsCount).toBe(1)
+    expect(harness.outbox.persisted).toHaveLength(0)
+    expect(harness.timers.pendingCount()).toBe(0)
   })
 })
