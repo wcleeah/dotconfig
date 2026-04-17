@@ -29,7 +29,10 @@
         },
         "exa": {
             "type": "remote",
-            "url": "https://mcp.exa.ai/mcp?exaApiKey=92ca7124-5d5e-4c20-ba1a-ff7c718ece45",
+            "url": "https://mcp.exa.ai/mcp",
+            "headers": {
+                "x-api-key": "{env:EXA_API_KEY}"
+            },
             "enabled": true
         }
     }
