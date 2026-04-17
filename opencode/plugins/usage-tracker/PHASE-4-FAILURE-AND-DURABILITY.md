@@ -4,9 +4,9 @@
 
 1. Phase number: 4
 2. Source plan: `plugins/usage-tracker/BACKGROUND-ROLLUP-PLAN.md`
-3. Readiness: `Blocked`
+3. Readiness: `Completed`
 4. Primary deliverable: failure hardening, durable cleanup correctness, and replay-tooling alignment for the durable journal architecture
-5. Blocking dependencies: Phases 2 and 3 are not yet implemented
+5. Blocking dependencies: none
 6. Target measurements summary: pending rollup work survives restart; deterministic replay works; durable journal entries are removed only after rollup success
 7. Next phase: `PHASE-5-SQL-OPTIMIZATIONS.md`
 
@@ -22,19 +22,21 @@ The source plan no longer treats durability as optional. This phase hardens the 
 
 Current evidence:
 
-1. none of those deliverables are visible in the repo yet
+1. background rollup scheduling exists and is tested
+2. startup recovery and forced convergence semantics exist and are tested
+3. the durable journal is the mainline source of truth for flushed batches
 
 ## Dependencies And How To Check Them
 
 1. Dependency: Phase 2 durable scheduler
 Why it matters: failure semantics only matter once journal-backed scheduling exists
 How to verify: inspect `plugins/usage-tracker/queue.js` and storage code for mainline durable journal writes, timer-driven `flushRollups()`, and no inline rollup recomputation in `flushBatch()`
-Status: `Not Done`
+Status: `Done`
 
 2. Dependency: Phase 3 startup recovery and convergence semantics
 Why it matters: this phase should harden failure behavior on top of known startup, `flush()`, and orphan replay ordering
 How to verify: inspect queue tests for deterministic startup recovery, `flush()`, and orphan replay behavior
-Status: `Not Done`
+Status: `Done`
 
 ## Target Measurements And Gates
 
@@ -43,28 +45,28 @@ Entry gates:
 1. Measurement: durable journal model exists and startup recovery is already present
 Pass condition: flushed batches persist before remote fact writes, and startup recovery is implemented
 Measurement method: inspect code and queue tests
-Current evidence: not yet present
-Status: `Not Met`
+Current evidence: durable journal writes, startup recovery, and queue convergence are implemented and covered by `plugins/usage-tracker/test/queue.test.js`
+Status: `Met`
 
 Exit gates:
 
 1. Measurement: restart recovery
 Pass condition: pending durable work survives simulated restart and converges later
 Measurement method: queue tests
-Current evidence: not yet implemented
-Status: `Not Met`
+Current evidence: implemented and covered by `queue.test.js`
+Status: `Met`
 
 2. Measurement: deterministic replay
 Pass condition: ordered replay is explicit and tested
 Measurement method: queue tests
-Current evidence: not yet implemented
-Status: `Not Met`
+Current evidence: implemented and covered by `queue.test.js`
+Status: `Met`
 
 3. Measurement: durable cleanup correctness
 Pass condition: durable journal entries are removed only after successful rollup replacement
 Measurement method: queue tests
-Current evidence: not yet implemented
-Status: `Not Met`
+Current evidence: implemented and covered by `queue.test.js`
+Status: `Met`
 
 ## Scope
 
@@ -151,7 +153,7 @@ What becomes unblocked:
 
 ## Open Questions Or Blockers
 
-1. Unknown: whether operator replay tooling should keep the `replay-outbox` command name after the storage model stops being failure-only
+1. Remaining question: whether the `replay-outbox` command name should be renamed later even though its behavior now matches durable journal replay semantics
 
 ## Sources
 

@@ -493,9 +493,7 @@ export function createIngestionQueue({
       await flushRollupsOnce()
     } finally {
       rollupRunning = false
-      if (closed) return
-
-      const rerunNow = rollupKickRequested && !rollupFailure && hasTouched(pendingRollupTouched)
+      const rerunNow = !closed && rollupKickRequested && !rollupFailure && hasTouched(pendingRollupTouched)
       rollupKickRequested = false
       if (rerunNow) {
         kickRollupPass()
@@ -605,7 +603,11 @@ export function createIngestionQueue({
     kickJournalDrain()
     await waitForFactsThrough(recoveryTarget)
     kickRollupPass()
-    await waitForRollupsThrough(recoveryTarget)
+    try {
+      await waitForRollupsThrough(recoveryTarget)
+    } catch (error) {
+      logger.error("[usage-tracker] startup recovery rollup failed", toErrorMessage(error))
+    }
   }
 
   return {

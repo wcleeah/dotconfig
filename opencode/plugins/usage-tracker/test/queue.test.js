@@ -511,6 +511,75 @@ describe("ingestion queue", () => {
     expect(outbox.orphanFiles).toHaveLength(0)
   })
 
+  it("fact write failure keeps durable work pending for later restart recovery", async () => {
+    const outbox = createFakeOutbox()
+    const firstHarness = createQueueHarness({ outbox })
+
+    await enqueueRepresentativeHotPath(firstHarness.queue)
+    firstHarness.turso.fail.writeFacts = 1
+
+    await firstHarness.timers.runNextTimer()
+
+    expect(firstHarness.turso.counters.writeFactsCount).toBe(1)
+    expect(firstHarness.turso.counters.replaceRollupsCount).toBe(0)
+    expect(outbox.persisted).toHaveLength(1)
+    expect(outbox.removed).toHaveLength(0)
+
+    const restartHarness = createQueueHarness({ outbox, turso: firstHarness.turso })
+    outbox.orphanFiles = outbox.list()
+
+    await restartHarness.queue.start()
+
+    expect(firstHarness.turso.counters.writeFactsCount).toBe(2)
+    expect(firstHarness.turso.counters.replaceRollupsCount).toBe(1)
+    expect(outbox.persisted).toHaveLength(0)
+    expect(outbox.orphanFiles).toHaveLength(0)
+  })
+
+  it("rollup success removes durable files only after replacement succeeds", async () => {
+    const harness = createQueueHarness()
+
+    await enqueueRepresentativeHotPath(harness.queue)
+    await harness.timers.runNextTimer()
+
+    const persistedFile = harness.outbox.list()[0]
+    expect(persistedFile).toBeDefined()
+    expect(harness.outbox.removed).toHaveLength(0)
+
+    await harness.timers.runNextTimer()
+
+    expect(harness.turso.counters.replaceRollupsCount).toBe(1)
+    expect(harness.outbox.removed).toEqual([persistedFile])
+    expect(harness.outbox.persisted).toHaveLength(0)
+  })
+
+  it("restart recovery plus rollup failure keeps durable work pending until a later successful retry", async () => {
+    const outbox = createFakeOutbox()
+    const firstHarness = createQueueHarness({ outbox })
+
+    await enqueueRepresentativeHotPath(firstHarness.queue)
+    await firstHarness.timers.runNextTimer()
+
+    expect(outbox.persisted).toHaveLength(1)
+
+    const restartHarness = createQueueHarness({ outbox, turso: firstHarness.turso })
+    outbox.orphanFiles = outbox.list()
+    restartHarness.turso.fail.replaceRollups = 1
+
+    await restartHarness.queue.start()
+
+    expect(firstHarness.turso.counters.replaceRollupsCount).toBe(1)
+    expect(outbox.persisted).toHaveLength(1)
+    expect(outbox.orphanFiles).toHaveLength(1)
+
+    restartHarness.turso.fail.replaceRollups = 0
+    await restartHarness.queue.replayAllOutbox()
+
+    expect(firstHarness.turso.counters.replaceRollupsCount).toBe(2)
+    expect(outbox.persisted).toHaveLength(0)
+    expect(outbox.orphanFiles).toHaveLength(0)
+  })
+
   it("flush waits for an already-started journal drain without losing work", async () => {
     const writeGate = createDeferred()
     const turso = createFakeTurso()
