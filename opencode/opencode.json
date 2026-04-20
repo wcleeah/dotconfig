@@ -27,6 +27,18 @@
             "enabled": true,
             "command": ["npx", "-y", "chrome-devtools-mcp@latest"]
         },
+        "research-tome": {
+            "type": "local",
+            "enabled": true,
+            "command": [
+                "pnpm",
+                "-C",
+                "/Users/leewingcheung/Documents/research",
+                "exec",
+                "tome",
+                "mcp"
+            ]
+        },
         "exa": {
             "type": "remote",
             "url": "https://mcp.exa.ai/mcp",

@@ -114,7 +114,70 @@ Good examples:
 
 Reuse that example so the plan feels connected instead of modular.
 
-### 6. No cold facts
+### 6. Build intuition before formal mechanics when needed
+
+If the plan depends on behavior that can feel magical, easy to misunderstand, or easy to misimplement, add a short intuition section before the exact implementation mechanics.
+
+Use this for topics like:
+- caching or invalidation
+- reactivity or state synchronization
+- SSR or hydration
+- concurrency, queueing, or background jobs
+- bundler, resolver, or build behavior
+- ranking, search, or recommendation flows
+- browser rendering or layout behavior
+- auth, token, or session flows
+
+Keep it short.
+
+Use:
+- one plain-English explanation
+- one tiny example or one end-to-end flow
+- one direct tie back to why this changes the recommendation
+
+The goal is not to turn the plan into a tutorial.
+The goal is to make the recommendation legible before the detailed steps begin.
+
+### 7. Use visuals when they reduce ambiguity
+
+If the plan spans multiple subsystems, request flows, state transitions, rollout phases, dependency edges, or ownership boundaries, include at least one Mermaid diagram.
+
+Prefer simple diagram types:
+- `flowchart` for architecture, dependencies, or rollout order
+- `sequenceDiagram` for request or interaction flow
+- `stateDiagram-v2` for lifecycle or state transitions
+- `graph TD` for subsystem or component relationships
+
+The diagram must:
+- match the prose exactly
+- use the same names as the surrounding sections
+- clarify the recommendation instead of decorating the document
+- stay small enough to read quickly
+
+If a diagram would not make the plan clearer, omit it.
+Do not force Mermaid into simple plans.
+
+### 8. UI plans need rough visual artifacts
+
+If the plan changes UI structure, screen layout, interaction flow, or component composition, include rough visual artifacts.
+
+Include:
+- a simple ASCII mock of the changed screen, region, or flow
+- a component map or component relationship diagram
+- key interaction or state boundaries when they affect implementation
+- responsive differences when they materially change the work
+
+Keep these rough and implementation-oriented.
+Do not produce polished design fiction.
+
+The visuals should help answer:
+- what the user sees
+- what components exist
+- where state lives
+- what data or API dependencies touch the UI
+- what likely needs to be built first
+
+### 9. No cold facts
 
 Do not include a fact just because it is relevant to the area.
 
@@ -126,7 +189,7 @@ Only include it if it does at least one of these:
 - explains a failure mode
 - explains how to verify success
 
-### 7. Tie claims to evidence
+### 10. Tie claims to evidence
 
 Every non-obvious claim needs a source.
 
@@ -139,7 +202,7 @@ Prefer sources in this order:
 
 Do not rely on general confidence or memory when the plan depends on exact tool behavior.
 
-### 8. Distinguish certainty levels
+### 11. Distinguish certainty levels
 
 Explicitly label claims when needed as:
 - Confirmed
@@ -148,7 +211,7 @@ Explicitly label claims when needed as:
 
 If some part of the plan depends on an assumption, call that out instead of quietly embedding it.
 
-### 9. End each section with "why this changes the plan"
+### 12. End each section with "why this changes the plan"
 
 At the end of each important section, answer:
 - so what?
@@ -165,13 +228,16 @@ Use this structure unless there is a strong reason not to:
 3. Constraints and assumptions
 4. Current state
 5. What is actually causing the problem
-6. Options considered
-7. Recommended approach
-8. Step-by-step implementation plan
-9. Risks and failure modes
-10. Verification plan
-11. Rollback or recovery plan
-12. Sources
+6. Intuition and mental model of the change (if needed)
+7. Options considered
+8. Recommended approach
+9. Visual overview (if needed)
+10. Step-by-step implementation plan
+11. UI sketch and component map (UI plans only)
+12. Risks and failure modes
+13. Verification plan
+14. Rollback or recovery plan
+15. Sources
 
 ## Section Rules
 
@@ -195,6 +261,11 @@ Cite file paths, commands, runtime behavior, or docs.
 ### What is actually causing the problem
 Do not jump to fixes before showing the cause.
 
+### Intuition and mental model of the change
+If the plan depends on tricky system behavior, explain the plain-English model before the detailed mechanics.
+Use one concrete flow or tiny example.
+End by explaining why this changes the recommendation.
+
 ### Options considered
 For each real option, include:
 - what it is
@@ -207,6 +278,11 @@ For each real option, include:
 ### Recommended approach
 State the recommendation clearly and show why it is the best tradeoff.
 
+### Visual overview
+When the recommendation involves multiple moving parts, include a Mermaid diagram that shows the system shape, flow, rollout, or dependency structure.
+Explain what the diagram is showing and why it matters.
+Do not let the diagram stand alone without prose.
+
 ### Step-by-step implementation plan
 Be concrete.
 Include:
@@ -215,6 +291,16 @@ Include:
 - sequence of work
 - dependency order between steps
 - migration order
+
+### UI sketch and component map
+For UI-related plans, include:
+- a rough ASCII mock of the changed interface
+- a component map or hierarchy
+- key interaction states when relevant
+- responsive differences when relevant
+
+Tie the mock and component map back to the implementation steps.
+If UI details depend on assumptions, label them explicitly.
 
 ### Risks and failure modes
 Name realistic breakage modes.
@@ -250,14 +336,24 @@ Then explain exactly why that matters for this repo shape.
 - If the recommendation depends on a version-specific behavior, say so.
 - Use file-level and subsystem-level references whenever possible.
 - Make the verification plan as concrete as the implementation plan.
+- Use intuition sections only when they help the reader understand a tricky recommendation.
+- Use Mermaid only when it removes ambiguity.
+- If Mermaid is included, the diagram names must match the prose exactly.
+- If a UI sketch is included, it must map to real components, routes, state owners, or APIs.
+- Keep visuals rough, compact, and implementation-oriented.
 
 ## Banned Failure Modes
 
 Do not:
 - use unexplained jargon
 - recommend a solution before explaining the cause
+- drop into exact mechanics before making the tricky behavior understandable
 - present options without real tradeoffs
 - make strong tool-behavior claims without sources
+- include decorative Mermaid that does not change understanding
+- include Mermaid that disagrees with the prose
+- produce a UI mock without mapping it to components or implementation steps
+- ignore responsive or state implications for UI work when they affect scope
 - confuse preference with fact
 - hide assumptions
 - write a plan that sounds complete but omits verification or rollback
@@ -267,8 +363,13 @@ Do not:
 Before finishing, verify:
 - the starting point, driving problem, and finish line are explicit
 - the recommendation clearly follows from the constraints and current state
+- tricky system behavior gets a short intuition section before the detailed plan when needed
 - every tricky claim has a source
+- Mermaid is used when it materially clarifies the plan, and omitted when it would be ceremony
+- any Mermaid names match the prose exactly
 - every important section explains why it changes the plan
+- UI-related plans include a rough ASCII mock and component map when structure or flow changes matter
+- visuals help explain implementation order and ownership, not just the end state
 - required work and optional work are clearly separated
 - verification and rollback are concrete enough to act on
 
@@ -277,7 +378,9 @@ Before finishing, verify:
 The finished document should feel like this:
 - here is the current situation
 - here is the real cause of the problem
+- here is the plain-English mental model before the tricky mechanics, when needed
 - here are the realistic options
 - here is why this one wins
+- here is the system or UI shape visually when that makes the plan easier to follow
 - here is the exact order to implement it
 - here is how to know it worked
