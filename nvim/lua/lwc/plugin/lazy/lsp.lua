@@ -27,7 +27,7 @@ return {
 					rust = { "rustfmt" },
 					zsh = { "beautysh" },
 					lua = { "stylua" },
-					sql = { "pgformatter" },
+					sql = { "sqruff" },
 					python = { "ruff_fix", "ruff_format", "ruff_organize_imports" },
 					elixir = { "mix" },
 					json = { "biome" },
